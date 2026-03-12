@@ -82,7 +82,7 @@ const SEED = [{
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const C = {
   bg: "#080e16", surface: "#060d14", border: "#0e2235", border2: "#1e3a52",
-  accent: "#00d4ff", text: "#c8d8e8", muted: "#3a5a72", dim: "#2a4a62", faint: "#1a3040",
+  accent: "#00d4ff", text: "#c8d8e8", muted: "#3a5a72", dim: "#2a4a62", faint: "#4a6a82",
   green: "#3ba55c", red: "#e05252", yellow: "#e8a020", purple: "#a78bfa",
 };
 
@@ -167,7 +167,7 @@ function Modal({ title, onClose, width = 540, children }) {
 function Stat({ label, value, color }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <div style={{ color: C.dim, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ color: "#6b8fa8", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 700, color: color ?? C.muted, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
     </div>
   );
@@ -799,11 +799,11 @@ export default function App() {
         <div style={{ width: 228, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "18px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
-            <div style={{ color: C.border2, fontSize: 9, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v2.0</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v2.0</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-            <div style={{ padding: "4px 16px 6px", color: C.border2, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase" }}>Projects</div>
+            <div style={{ padding: "4px 16px 6px", color: "#6b8fa8", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Projects</div>
             {projects.map(p => {
               const pc = (p.parts ?? []).reduce((s, x) => s + n2(x.unitCost) * n2(x.qty || 1), 0);
               return (
@@ -812,7 +812,7 @@ export default function App() {
                   style={{ padding: "9px 16px", cursor: "pointer", background: selected === p.id ? "#0d1a26" : "transparent", borderLeft: selected === p.id ? `2px solid ${C.accent}` : "2px solid transparent", transition: "all 0.1s" }}
                 >
                   <div style={{ color: selected === p.id ? "#e0f4ff" : C.muted, fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>{p.name}</div>
-                  <div style={{ color: C.dim, fontSize: 10, marginTop: 3 }}>{(p.parts ?? []).length} parts · ${pc.toFixed(2)}</div>
+                  <div style={{ color: "#6b8fa8", fontSize: 11, fontWeight: 700, marginTop: 3 }}>{(p.parts ?? []).length} parts · ${pc.toFixed(2)}</div>
                 </div>
               );
             })}
@@ -838,7 +838,7 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
                   <div>
                     <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 20, color: "#e0f4ff" }}>{active.name}</div>
-                    {active.description && <div style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>{active.description}</div>}
+                    {active.description && <div style={{ color: "#6b8fa8", fontSize: 11, fontWeight: 700, marginTop: 2 }}>{active.description}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 7, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <button onClick={() => setShowQuote(true)}    style={btnPrimary}>📋 Quote</button>
@@ -874,7 +874,7 @@ export default function App() {
                 ) : (
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ color: C.dim, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>
+                      <tr style={{ color: "#6b8fa8", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>
                         {["", "Name", "Vendor", "Qty", "Part # / Files", "Unit $", "Total", "Asm", "Notes", ""].map((h, i) => (
                           <th key={i} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
@@ -901,9 +901,9 @@ export default function App() {
                               </div>
                             </td>
                             <td style={{ padding: "9px 10px" }}><Badge vendorId={part.vendor} /></td>
-                            <td style={{ padding: "9px 10px", color: "#7aafcc", fontSize: 12 }}>{part.qty} <span style={{ color: C.dim, fontSize: 10 }}>{part.unit}</span></td>
+                            <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{part.qty} <span style={{ color: "#6b8fa8", fontSize: 11, fontWeight: 700 }}>{part.unit}</span></td>
                             <td style={{ padding: "9px 10px", fontSize: 11, maxWidth: 180 }}>
-                              {part.partNumber && <div style={{ color: C.muted }}>{part.partNumber}</div>}
+                              {part.partNumber && <div style={{ color: "#6b8fa8", fontWeight: 700 }}>{part.partNumber}</div>}
                               {part.files && (
                                 <div style={{ color: C.green, marginTop: 2, fontSize: 10 }}>
                                   {part.files.split(",").map((f, i) => <span key={i} style={{ marginRight: 6 }}>📄 {f.trim()}</span>)}
@@ -911,7 +911,7 @@ export default function App() {
                               )}
                               {!part.partNumber && !part.files && <span style={{ color: C.faint }}>—</span>}
                             </td>
-                            <td style={{ padding: "9px 10px", color: C.muted, fontSize: 12 }}>
+                            <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>
                               {cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: tot > 0 ? C.accent : C.faint, fontSize: 12, fontWeight: 700 }}>
@@ -935,10 +935,10 @@ export default function App() {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={4} style={{ padding: "12px 10px", borderTop: `1px solid ${C.border2}`, color: C.dim, fontSize: 10 }}>
+                        <td colSpan={4} style={{ padding: "12px 10px", borderTop: `1px solid ${C.border2}`, color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>
                           {filtered.length} parts · {filtered.reduce((s, p) => s + n2(p.assemblyMins) * n2(p.qty || 1), 0).toFixed(0)} min assembly
                         </td>
-                        <td colSpan={2} style={{ padding: "12px 10px", borderTop: `1px solid ${C.border2}`, color: C.muted, fontSize: 12 }}>Parts subtotal</td>
+                        <td colSpan={2} style={{ padding: "12px 10px", borderTop: `1px solid ${C.border2}`, color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>Parts subtotal</td>
                         <td style={{ padding: "12px 10px", borderTop: `1px solid ${C.border2}`, color: C.accent, fontSize: 14, fontWeight: 700 }}>
                           ${filtered.reduce((s, p) => s + n2(p.unitCost) * n2(p.qty || 1), 0).toFixed(2)}
                         </td>
