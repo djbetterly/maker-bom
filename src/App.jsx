@@ -28,9 +28,14 @@ const DEFAULT_SETTINGS = {
   electricityRate: 0.14,
   wearTearRate: 0.50,
   defaultMarkup: 35,
-  spoolCost: 22,
-  spoolSize: 1000,
 };
+
+const SEED_FILAMENTS = [
+  { id: "f1", name: "Bambu PLA Basic",  brand: "Bambu Labs", material: "PLA",  color: "#e8e8e8", spoolCost: 19.99, spoolSize: 1000 },
+  { id: "f2", name: "Bambu PETG Basic", brand: "Bambu Labs", material: "PETG", color: "#7aafcc", spoolCost: 21.99, spoolSize: 1000 },
+  { id: "f3", name: "Bambu ABS",        brand: "Bambu Labs", material: "ABS",  color: "#888",    spoolCost: 24.99, spoolSize: 1000 },
+  { id: "f4", name: "eSUN TPU 95A",     brand: "eSUN",       material: "TPU",  color: "#3ba55c", spoolCost: 28.99, spoolSize: 1000 },
+];
 
 const EMPTY_PART = {
   id: null, name: "", type: "purchased", qty: 1, unit: "ea",
@@ -39,9 +44,8 @@ const EMPTY_PART = {
 };
 
 const EMPTY_CALC = {
-  filamentGrams: "", printTimeHrs: "", hasSupports: false,
-  supportRemovalMins: 15, setupMins: 10, cleanupMins: 5,
-  markup: "", overrideSpoolCost: "", overrideSpoolSize: "",
+  filamentId: "", filamentGrams: "", printTimeHrs: "", hasSupports: false,
+  supportRemovalMins: 15, setupMins: 10, cleanupMins: 5, markup: "",
 };
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -169,50 +173,180 @@ function Stat({ label, value, color }) {
   );
 }
 
+// ─── FILAMENT LIBRARY MODAL ──────────────────────────────────────────────────
+const MATERIALS = ["PLA","PETG","ABS","ASA","TPU","TPE","Nylon","PC","HIPS","PVA","CF-PLA","CF-PETG","Other"];
+
+function FilamentLibraryModal({ filaments, onSave, onClose }) {
+  const [list, setList]   = useState(filaments);
+  const [editing, setEditing] = useState(null); // null | "new" | filament object
+  const [form, setForm]   = useState({});
+  const setF = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  function startNew() {
+    setForm({ name: "", brand: "", material: "PLA", color: "#e8e8e8", spoolCost: "", spoolSize: 1000 });
+    setEditing("new");
+  }
+  function startEdit(f) { setForm({ ...f }); setEditing(f); }
+  function saveForm() {
+    if (!form.name.trim()) return;
+    if (editing === "new") {
+      setList(l => [...l, { ...form, id: uid(), spoolCost: parseFloat(form.spoolCost)||0, spoolSize: parseFloat(form.spoolSize)||1000 }]);
+    } else {
+      setList(l => l.map(x => x.id === editing.id ? { ...x, ...form, spoolCost: parseFloat(form.spoolCost)||0, spoolSize: parseFloat(form.spoolSize)||1000 } : x));
+    }
+    setEditing(null);
+  }
+  function remove(id) { setList(l => l.filter(x => x.id !== id)); }
+
+  const gpg = f => f.spoolSize > 0 ? (f.spoolCost / f.spoolSize) : 0;
+
+  return (
+    <Modal title="🧵  Filament Library" onClose={onClose} width={620}>
+      {/* List */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+        <thead>
+          <tr style={{ color: C.dim, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            {["","Name","Brand","Material","Spool","$/g",""].map((h,i) => (
+              <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(f => (
+            <tr key={f.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+              <td style={{ padding: "9px 8px", width: 16 }}>
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: f.color, border: `1px solid ${C.border2}`, flexShrink: 0 }} />
+              </td>
+              <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{f.name}</td>
+              <td style={{ padding: "9px 8px", color: C.muted, fontSize: 12 }}>{f.brand}</td>
+              <td style={{ padding: "9px 8px" }}>
+                <span style={{ background: C.border2, color: C.text, borderRadius: 3, padding: "2px 6px", fontSize: 10, fontFamily: "monospace" }}>{f.material}</span>
+              </td>
+              <td style={{ padding: "9px 8px", color: C.muted, fontSize: 12 }}>${n2(f.spoolCost).toFixed(2)} / {f.spoolSize}g</td>
+              <td style={{ padding: "9px 8px", color: C.accent, fontSize: 11, fontFamily: "monospace" }}>${gpg(f).toFixed(4)}</td>
+              <td style={{ padding: "9px 8px" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => startEdit(f)} style={{ ...btnGhost, padding: "3px 8px", fontSize: 9 }}>edit</button>
+                  <button onClick={() => remove(f.id)} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9 }}>✕</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {list.length === 0 && (
+            <tr><td colSpan={7} style={{ padding: "24px 8px", color: C.dim, fontSize: 12, textAlign: "center" }}>No filaments yet</td></tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Inline add/edit form */}
+      {editing ? (
+        <div style={{ background: "#040b12", border: `1px solid ${C.border2}`, borderRadius: 6, padding: 16, marginBottom: 16 }}>
+          <div style={{ color: C.accent, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>
+            {editing === "new" ? "New Filament" : "Edit Filament"}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="Name"><input style={inp} value={form.name} onChange={setF("name")} placeholder='e.g. Bambu PLA Basic - White' /></F>
+            </div>
+            <F label="Brand"><input style={inp} value={form.brand} onChange={setF("brand")} placeholder="e.g. Bambu Labs" /></F>
+            <F label="Material">
+              <select style={sel} value={form.material} onChange={setF("material")}>
+                {MATERIALS.map(m => <option key={m}>{m}</option>)}
+              </select>
+            </F>
+            <F label="Color (hex)">
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="color" value={form.color} onChange={setF("color")} style={{ width: 36, height: 34, border: `1px solid ${C.border2}`, borderRadius: 4, background: "none", cursor: "pointer", padding: 2 }} />
+                <input style={{ ...inp, flex: 1 }} value={form.color} onChange={setF("color")} placeholder="#ffffff" />
+              </div>
+            </F>
+            <F label="Spool Cost ($)"><input style={inp} type="number" step="0.01" value={form.spoolCost} onChange={setF("spoolCost")} placeholder="0.00" /></F>
+            <F label="Spool Size (g)"><input style={inp} type="number" value={form.spoolSize} onChange={setF("spoolSize")} /></F>
+            <F label="Cost per gram">
+              <div style={{ color: C.accent, fontSize: 13, fontFamily: "monospace", paddingTop: 8 }}>
+                ${form.spoolCost && form.spoolSize ? (n2(form.spoolCost) / (n2(form.spoolSize) || 1)).toFixed(4) : "—"}/g
+              </div>
+            </F>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setEditing(null)} style={btnGhost}>Cancel</button>
+            <button onClick={saveForm} style={btnPrimary}>Save Filament</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={startNew} style={{ ...btnGreenOut, marginBottom: 16 }}>+ Add Filament</button>
+      )}
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+        <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <button onClick={() => onSave(list)} style={btnPrimary}>Save Library</button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── PRINT CALCULATOR ─────────────────────────────────────────────────────────
-function PrintCalc({ settings, onApply, onClose }) {
-  const [c, setC] = useState(EMPTY_CALC);
+function PrintCalc({ settings, filaments, onApply, onClose }) {
+  const [c, setC] = useState({ ...EMPTY_CALC, filamentId: filaments[0]?.id ?? "" });
   const s   = k => e => setC(p => ({ ...p, [k]: e.target.value }));
   const tog = k => () => setC(p => ({ ...p, [k]: !p[k] }));
 
-  const spoolCost = n2(c.overrideSpoolCost) || settings.spoolCost;
-  const spoolSize = n2(c.overrideSpoolSize) || settings.spoolSize;
-  const gpg       = spoolSize > 0 ? spoolCost / spoolSize : 0;
-  const filament  = n2(c.filamentGrams) * gpg;
-  const hrs       = n2(c.printTimeHrs);
-  const elec      = (settings.printerWatts / 1000) * hrs * settings.electricityRate;
-  const wear      = hrs * settings.wearTearRate;
-  const lr        = settings.laborRate;
-  const setup     = (n2(c.setupMins)   / 60) * lr;
-  const cleanup   = (n2(c.cleanupMins) / 60) * lr;
-  const support   = c.hasSupports ? (n2(c.supportRemovalMins) / 60) * lr : 0;
-  const sub       = filament + elec + wear + setup + cleanup + support;
-  const mu        = n2(c.markup !== "" ? c.markup : settings.defaultMarkup);
-  const total     = sub * (1 + mu / 100);
+  const filament = filaments.find(f => f.id === c.filamentId);
+  const gpg      = filament ? n2(filament.spoolCost) / (n2(filament.spoolSize) || 1) : 0;
+  const fCost    = n2(c.filamentGrams) * gpg;
+  const hrs      = n2(c.printTimeHrs);
+  const elec     = (settings.printerWatts / 1000) * hrs * settings.electricityRate;
+  const wear     = hrs * settings.wearTearRate;
+  const lr       = settings.laborRate;
+  const setup    = (n2(c.setupMins)   / 60) * lr;
+  const cleanup  = (n2(c.cleanupMins) / 60) * lr;
+  const support  = c.hasSupports ? (n2(c.supportRemovalMins) / 60) * lr : 0;
+  const sub      = fCost + elec + wear + setup + cleanup + support;
+  const mu       = n2(c.markup !== "" ? c.markup : settings.defaultMarkup);
+  const total    = sub * (1 + mu / 100);
 
   const rows = [
-    { l: "Filament",        v: filament, d: `${n2(c.filamentGrams).toFixed(1)}g × $${gpg.toFixed(4)}/g` },
-    { l: "Electricity",     v: elec,     d: `${hrs}h × ${settings.printerWatts}W @ $${settings.electricityRate}/kWh` },
-    { l: "Wear & Tear",     v: wear,     d: `${hrs}h × $${settings.wearTearRate}/hr` },
-    { l: "Setup",           v: setup,    d: `${c.setupMins}min @ $${lr}/hr` },
-    { l: "Cleanup",         v: cleanup,  d: `${c.cleanupMins}min @ $${lr}/hr` },
+    { l: "Filament",        v: fCost,   d: `${n2(c.filamentGrams).toFixed(1)}g × $${gpg.toFixed(4)}/g${filament ? ` (${filament.name})` : ""}` },
+    { l: "Electricity",     v: elec,    d: `${hrs}h × ${settings.printerWatts}W @ $${settings.electricityRate}/kWh` },
+    { l: "Wear & Tear",     v: wear,    d: `${hrs}h × $${settings.wearTearRate}/hr` },
+    { l: "Setup",           v: setup,   d: `${c.setupMins}min @ $${lr}/hr` },
+    { l: "Cleanup",         v: cleanup, d: `${c.cleanupMins}min @ $${lr}/hr` },
     ...(c.hasSupports ? [{ l: "Support Removal", v: support, d: `${c.supportRemovalMins}min @ $${lr}/hr` }] : []),
   ];
 
   return (
-    <Modal title="🖨️  3D Print Cost Calculator" onClose={onClose} width={600}>
+    <Modal title="🖨️  3D Print Cost Calculator" onClose={onClose} width={620}>
+
+      {/* Filament picker */}
+      <HR label="Filament" />
+      {filaments.length === 0 ? (
+        <div style={{ color: C.yellow, fontSize: 12, marginBottom: 14 }}>⚠ No filaments in library — add some in Settings → Filament Library</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, marginBottom: 16 }}>
+          {filaments.map(f => (
+            <div key={f.id}
+              onClick={() => setC(p => ({ ...p, filamentId: f.id }))}
+              style={{
+                border: `1px solid ${c.filamentId === f.id ? C.accent : C.border2}`,
+                background: c.filamentId === f.id ? C.accent + "12" : "#040b12",
+                borderRadius: 5, padding: "10px 12px", cursor: "pointer", transition: "all 0.1s",
+              }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: f.color, flexShrink: 0 }} />
+                <span style={{ color: C.text, fontSize: 11, fontWeight: 700, lineHeight: 1.2 }}>{f.name}</span>
+              </div>
+              <div style={{ color: C.muted, fontSize: 10 }}>{f.material} · ${n2(f.spoolCost).toFixed(2)}/{f.spoolSize}g</div>
+              <div style={{ color: C.accent, fontSize: 10, fontFamily: "monospace", marginTop: 2 }}>${(n2(f.spoolCost)/(n2(f.spoolSize)||1)).toFixed(4)}/g</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 22px" }}>
         <div>
           <HR label="Print Details" />
           <F label="Filament Used (grams)"><input style={inp} type="number" step="0.1" value={c.filamentGrams} onChange={s("filamentGrams")} placeholder="e.g. 48" /></F>
           <F label="Print Time (hours)"><input style={inp} type="number" step="0.25" value={c.printTimeHrs} onChange={s("printTimeHrs")} placeholder="e.g. 3.5" /></F>
-          <HR label="Spool Override (optional)" />
-          <F label="Spool Cost ($)" hint={`Default: $${settings.spoolCost}`}>
-            <input style={inp} type="number" step="0.01" value={c.overrideSpoolCost} onChange={s("overrideSpoolCost")} placeholder={`$${settings.spoolCost}`} />
-          </F>
-          <F label="Spool Size (g)" hint={`Default: ${settings.spoolSize}g`}>
-            <input style={inp} type="number" value={c.overrideSpoolSize} onChange={s("overrideSpoolSize")} placeholder={`${settings.spoolSize}`} />
-          </F>
         </div>
         <div>
           <HR label="Labor" />
@@ -224,11 +358,7 @@ function PrintCalc({ settings, onApply, onClose }) {
               Part has supports
             </label>
           </div>
-          {c.hasSupports && (
-            <F label="Support Removal (mins)">
-              <input style={inp} type="number" value={c.supportRemovalMins} onChange={s("supportRemovalMins")} />
-            </F>
-          )}
+          {c.hasSupports && <F label="Support Removal (mins)"><input style={inp} type="number" value={c.supportRemovalMins} onChange={s("supportRemovalMins")} /></F>}
           <F label={`Markup % (default ${settings.defaultMarkup}%)`}>
             <input style={inp} type="number" value={c.markup} onChange={s("markup")} placeholder={`${settings.defaultMarkup}`} />
           </F>
@@ -261,8 +391,8 @@ function PrintCalc({ settings, onApply, onClose }) {
         <button onClick={onClose} style={btnGhost}>Cancel</button>
         <button
           onClick={() => onApply(total.toFixed(2))}
-          style={{ ...btnPrimary, opacity: (!c.filamentGrams || !c.printTimeHrs) ? 0.4 : 1 }}
-          disabled={!c.filamentGrams || !c.printTimeHrs}
+          style={{ ...btnPrimary, opacity: (!c.filamentGrams || !c.printTimeHrs || !c.filamentId) ? 0.4 : 1 }}
+          disabled={!c.filamentGrams || !c.printTimeHrs || !c.filamentId}
         >
           Apply → ${total.toFixed(2)}
         </button>
@@ -288,14 +418,6 @@ function SettingsModal({ settings, onSave, onClose }) {
         <F label="Wear & Tear ($/hr)"><input style={inp} type="number" step="0.05" value={s.wearTearRate} onChange={set("wearTearRate")} /></F>
         <F label="Default Markup (%)"><input style={inp} type="number" value={s.defaultMarkup} onChange={set("defaultMarkup")} /></F>
       </div>
-      <HR label="Default Filament Spool" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-        <F label="Spool Cost ($)"><input style={inp} type="number" step="0.01" value={s.spoolCost} onChange={set("spoolCost")} /></F>
-        <F label="Spool Size (g)"><input style={inp} type="number" value={s.spoolSize} onChange={set("spoolSize")} /></F>
-      </div>
-      <div style={{ color: C.dim, fontSize: 11, marginTop: -8, marginBottom: 16 }}>
-        → ${(n2(s.spoolCost) / (n2(s.spoolSize) || 1)).toFixed(4)} per gram
-      </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button onClick={onClose} style={btnGhost}>Cancel</button>
         <button onClick={() => onSave(s)} style={btnPrimary}>Save Settings</button>
@@ -305,7 +427,7 @@ function SettingsModal({ settings, onSave, onClose }) {
 }
 
 // ─── PART MODAL ───────────────────────────────────────────────────────────────
-function PartModal({ initial, settings, onSave, onClose }) {
+function PartModal({ initial, settings, filaments, onSave, onClose }) {
   const [form, setForm]     = useState(initial ?? EMPTY_PART);
   const [showCalc, setShowCalc] = useState(false);
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
@@ -413,6 +535,7 @@ function PartModal({ initial, settings, onSave, onClose }) {
       {showCalc && (
         <PrintCalc
           settings={settings}
+          filaments={filaments ?? []}
           onApply={cost => { setForm(p => ({ ...p, unitCost: cost })); setShowCalc(false); }}
           onClose={() => setShowCalc(false)}
         />
@@ -560,33 +683,38 @@ function QuoteModal({ project, settings, onClose }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [projects,      setProjects]      = useState([]);
-  const [settings,      setSettings]      = useState(DEFAULT_SETTINGS);
-  const [selected,      setSelected]      = useState(null);
-  const [loaded,        setLoaded]        = useState(false);
-  const [search,        setSearch]        = useState("");
-  const [showAddProj,   setShowAddProj]   = useState(false);
-  const [editProj,      setEditProj]      = useState(null);
-  const [showAddPart,   setShowAddPart]   = useState(false);
-  const [editPart,      setEditPart]      = useState(null);
-  const [showSettings,  setShowSettings]  = useState(false);
-  const [showDelivery,  setShowDelivery]  = useState(false);
-  const [showQuote,     setShowQuote]     = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [projects,       setProjects]       = useState([]);
+  const [settings,       setSettings]       = useState(DEFAULT_SETTINGS);
+  const [filaments,      setFilaments]      = useState([]);
+  const [selected,       setSelected]       = useState(null);
+  const [loaded,         setLoaded]         = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [showAddProj,    setShowAddProj]    = useState(false);
+  const [editProj,       setEditProj]       = useState(null);
+  const [showAddPart,    setShowAddPart]    = useState(false);
+  const [editPart,       setEditPart]       = useState(null);
+  const [showSettings,   setShowSettings]   = useState(false);
+  const [showFilamentLib,setShowFilamentLib]= useState(false);
+  const [showDelivery,   setShowDelivery]   = useState(false);
+  const [showQuote,      setShowQuote]      = useState(false);
+  const [deleteConfirm,  setDeleteConfirm]  = useState(null);
 
   // Load from localStorage
   useEffect(() => {
-    const p = lsGet("maker_bom_projects");
-    const s = lsGet("maker_bom_settings");
+    const p  = lsGet("maker_bom_projects");
+    const s  = lsGet("maker_bom_settings");
+    const fl = lsGet("maker_bom_filaments");
     const projs = p ?? SEED;
     setProjects(projs);
-    if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
+    if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
+    setFilaments(fl ?? SEED_FILAMENTS);
     if (projs.length) setSelected(projs[0].id);
     setLoaded(true);
   }, []);
 
-  const persist      = useCallback((next) => { setProjects(next); lsSet("maker_bom_projects", next); }, []);
-  const saveSettings = useCallback((s)    => { setSettings(s);    lsSet("maker_bom_settings", s);   }, []);
+  const persist        = useCallback((next) => { setProjects(next);  lsSet("maker_bom_projects",  next); }, []);
+  const saveSettings   = useCallback((s)    => { setSettings(s);     lsSet("maker_bom_settings",  s);   }, []);
+  const saveFilaments  = useCallback((fl)   => { setFilaments(fl);   lsSet("maker_bom_filaments", fl);  }, []);
 
   const active   = projects.find(p => p.id === selected);
   const parts    = active?.parts    ?? [];
@@ -694,6 +822,9 @@ export default function App() {
             <button onClick={() => setShowAddProj(true)} style={{ ...btnPrimary, width: "100%", textAlign: "center" }}>+ New Project</button>
             <button onClick={() => setShowSettings(true)} style={{ ...btnGhost, width: "100%", textAlign: "center", fontSize: 10 }}>
               ⚙️ Settings · ${settings.laborRate}/hr · {settings.defaultMarkup}% markup
+            </button>
+            <button onClick={() => setShowFilamentLib(true)} style={{ ...btnGhost, width: "100%", textAlign: "center", fontSize: 10, color: C.green, borderColor: C.green + "44" }}>
+              🧵 Filament Library · {filaments.length} profiles
             </button>
           </div>
         </div>
@@ -829,11 +960,12 @@ export default function App() {
       </div>
 
       {/* ── MODALS ── */}
-      {showSettings  && <SettingsModal settings={settings} onSave={s => { saveSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
+      {showSettings    && <SettingsModal settings={settings} onSave={s => { saveSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
+      {showFilamentLib && <FilamentLibraryModal filaments={filaments} onSave={fl => { saveFilaments(fl); setShowFilamentLib(false); }} onClose={() => setShowFilamentLib(false)} />}
       {showAddProj   && <ProjectModal onSave={addProject} onClose={() => setShowAddProj(false)} />}
       {editProj      && <ProjectModal initial={editProj} onSave={updateProject} onClose={() => setEditProj(null)} />}
-      {showAddPart   && <PartModal settings={settings} onSave={addPart} onClose={() => setShowAddPart(false)} />}
-      {editPart      && <PartModal initial={editPart} settings={settings} onSave={updatePart} onClose={() => setEditPart(null)} />}
+      {showAddPart   && <PartModal settings={settings} filaments={filaments} onSave={addPart} onClose={() => setShowAddPart(false)} />}
+      {editPart      && <PartModal initial={editPart} settings={settings} filaments={filaments} onSave={updatePart} onClose={() => setEditPart(null)} />}
       {showDelivery  && <DeliveryModal delivery={active?.delivery} onSave={saveDelivery} onClose={() => setShowDelivery(false)} />}
       {showQuote && active && <QuoteModal project={active} settings={settings} onClose={() => setShowQuote(false)} />}
 
