@@ -509,7 +509,7 @@ function QuoteModal({ project, settings, onClose }) {
   return (
     <Modal title="📋  Quote Summary" onClose={onClose} width={480}>
       <div style={{ background: "#040b12", border: `1px solid ${C.border}`, borderRadius: 6, padding: "14px 16px", marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: "#e0f4ff" }}>{project.name}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18, color: "#e0f4ff" }}>{project.name}</div>
         {project.description && <div style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>{project.description}</div>}
         <div style={{ color: C.dim, fontSize: 10, marginTop: 6 }}>Generated {new Date().toLocaleDateString()}</div>
       </div>
@@ -652,7 +652,7 @@ export default function App() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: ${C.bg}; }
@@ -670,7 +670,7 @@ export default function App() {
         {/* ── SIDEBAR ── */}
         <div style={{ width: 228, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "18px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
             <div style={{ color: C.border2, fontSize: 9, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v2.0</div>
           </div>
 
@@ -706,7 +706,7 @@ export default function App() {
               <div style={{ padding: "15px 22px 12px", borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
                   <div>
-                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 20, color: "#e0f4ff" }}>{active.name}</div>
+                    <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 20, color: "#e0f4ff" }}>{active.name}</div>
                     {active.description && <div style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>{active.description}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 7, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
