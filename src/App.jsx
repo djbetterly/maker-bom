@@ -92,7 +92,7 @@ const baseBtn = {
   fontWeight: 700, letterSpacing: "0.05em", transition: "opacity 0.1s",
 };
 const btnPrimary  = { ...baseBtn, background: C.accent,       color: "#041219",  border: "none" };
-const btnGhost    = { ...baseBtn, background: "transparent",   color: C.muted };
+const btnGhost    = { ...baseBtn, background: "transparent",   color: "#6b8fa8" };
 const btnDanger   = { ...baseBtn, background: "transparent",   color: C.red,     borderColor: C.red    + "44" };
 const btnGreenOut = { ...baseBtn, background: "transparent",   color: C.green,   borderColor: C.green  + "44" };
 
@@ -123,7 +123,7 @@ function F({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={{
-        display: "block", color: C.dim, fontSize: 10,
+        display: "block", color: "#6b8fa8", fontSize: 10,
         fontFamily: "'JetBrains Mono', monospace",
         letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 5,
       }}>{label}</label>
@@ -137,7 +137,7 @@ function HR({ label }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 14px" }}>
       <div style={{ flex: 1, height: 1, background: C.border }} />
-      {label && <span style={{ color: C.dim, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>}
+      {label && <span style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>}
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
   );
@@ -156,7 +156,7 @@ function Modal({ title, onClose, width = 540, children }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px 12px", borderBottom: `1px solid ${C.border}` }}>
           <span style={{ color: C.accent, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6b8fa8", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: "20px 22px" }}>{children}</div>
       </div>
@@ -205,7 +205,7 @@ function FilamentLibraryModal({ filaments, onSave, onClose }) {
       {/* List */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
         <thead>
-          <tr style={{ color: C.dim, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {["","Name","Brand","Material","Spool","$/g",""].map((h,i) => (
               <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
             ))}
@@ -218,11 +218,11 @@ function FilamentLibraryModal({ filaments, onSave, onClose }) {
                 <div style={{ width: 12, height: 12, borderRadius: "50%", background: f.color, border: `1px solid ${C.border2}`, flexShrink: 0 }} />
               </td>
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{f.name}</td>
-              <td style={{ padding: "9px 8px", color: C.muted, fontSize: 12 }}>{f.brand}</td>
+              <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 12 }}>{f.brand}</td>
               <td style={{ padding: "9px 8px" }}>
                 <span style={{ background: C.border2, color: C.text, borderRadius: 3, padding: "2px 6px", fontSize: 10, fontFamily: "monospace" }}>{f.material}</span>
               </td>
-              <td style={{ padding: "9px 8px", color: C.muted, fontSize: 12 }}>${n2(f.spoolCost).toFixed(2)} / {f.spoolSize}g</td>
+              <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 12 }}>${n2(f.spoolCost).toFixed(2)} / {f.spoolSize}g</td>
               <td style={{ padding: "9px 8px", color: C.accent, fontSize: 11, fontFamily: "monospace" }}>${gpg(f).toFixed(4)}</td>
               <td style={{ padding: "9px 8px" }}>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -233,7 +233,7 @@ function FilamentLibraryModal({ filaments, onSave, onClose }) {
             </tr>
           ))}
           {list.length === 0 && (
-            <tr><td colSpan={7} style={{ padding: "24px 8px", color: C.dim, fontSize: 12, textAlign: "center" }}>No filaments yet</td></tr>
+            <tr><td colSpan={7} style={{ padding: "24px 8px", color: "#6b8fa8", fontSize: 12, textAlign: "center" }}>No filaments yet</td></tr>
           )}
         </tbody>
       </table>
@@ -335,7 +335,7 @@ function PrintCalc({ settings, filaments, onApply, onClose }) {
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: f.color, flexShrink: 0 }} />
                 <span style={{ color: C.text, fontSize: 11, fontWeight: 700, lineHeight: 1.2 }}>{f.name}</span>
               </div>
-              <div style={{ color: C.muted, fontSize: 10 }}>{f.material} · ${n2(f.spoolCost).toFixed(2)}/{f.spoolSize}g</div>
+              <div style={{ color: "#6b8fa8", fontSize: 10 }}>{f.material} · ${n2(f.spoolCost).toFixed(2)}/{f.spoolSize}g</div>
               <div style={{ color: C.accent, fontSize: 10, fontFamily: "monospace", marginTop: 2 }}>${(n2(f.spoolCost)/(n2(f.spoolSize)||1)).toFixed(4)}/g</div>
             </div>
           ))}
@@ -367,18 +367,18 @@ function PrintCalc({ settings, filaments, onApply, onClose }) {
 
       {/* Breakdown */}
       <div style={{ background: "#040b12", border: `1px solid ${C.border}`, borderRadius: 6, padding: 16, marginTop: 8 }}>
-        <div style={{ color: C.dim, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Cost Breakdown</div>
+        <div style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Cost Breakdown</div>
         {rows.map(r => (
           <div key={r.l} style={{ display: "flex", justifyContent: "space-between", marginBottom: 7, fontSize: 12 }}>
-            <span style={{ color: C.muted }}>{r.l} <span style={{ color: C.faint, fontSize: 10 }}>({r.d})</span></span>
+            <span style={{ color: "#6b8fa8" }}>{r.l} <span style={{ color: C.faint, fontSize: 10 }}>({r.d})</span></span>
             <span style={{ color: C.text, fontFamily: "monospace" }}>${r.v.toFixed(4)}</span>
           </div>
         ))}
         <div style={{ height: 1, background: C.border2, margin: "10px 0" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b8fa8", marginBottom: 5 }}>
           <span>Subtotal</span><span style={{ fontFamily: "monospace" }}>${sub.toFixed(4)}</span>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b8fa8", marginBottom: 5 }}>
           <span>Markup ({mu}%)</span><span style={{ fontFamily: "monospace" }}>+${(total - sub).toFixed(4)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 700, marginTop: 6 }}>
@@ -573,21 +573,21 @@ function DeliveryModal({ delivery, onSave, onClose }) {
   const total = fees.reduce((s, f) => s + n2(f.amount), 0);
   return (
     <Modal title="🚚  Delivery Fees" onClose={onClose} width={380}>
-      <div style={{ color: C.muted, fontSize: 11, marginBottom: 16 }}>
+      <div style={{ color: "#6b8fa8", fontSize: 11, marginBottom: 16 }}>
         Shipping & handling per vendor for this project.
       </div>
       {fees.map(fee => {
         const v = VENDORS.find(x => x.id === fee.vendor);
         return (
           <div key={fee.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-            <span style={{ color: C.muted, fontSize: 12, minWidth: 130 }}>{v?.label}</span>
-            <span style={{ color: C.dim }}>$</span>
+            <span style={{ color: "#6b8fa8", fontSize: 12, minWidth: 130 }}>{v?.label}</span>
+            <span style={{ color: "#6b8fa8" }}>$</span>
             <input style={{ ...inp, width: 100 }} type="number" step="0.01" value={fee.amount} onChange={e => setAmt(fee.id, e.target.value)} placeholder="0.00" />
           </div>
         );
       })}
       <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ color: C.muted, fontSize: 12 }}>Total Delivery</span>
+        <span style={{ color: "#6b8fa8", fontSize: 12 }}>Total Delivery</span>
         <span style={{ color: C.accent, fontFamily: "monospace", fontWeight: 700, fontSize: 16 }}>${total.toFixed(2)}</span>
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
@@ -623,9 +623,9 @@ function QuoteModal({ project, settings, onClose }) {
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
       <div>
         <div style={{ color: C.text, fontSize: 13 }}>{label}</div>
-        {sub && <div style={{ color: C.dim, fontSize: 10, marginTop: 2 }}>{sub}</div>}
+        {sub && <div style={{ color: "#6b8fa8", fontSize: 10, marginTop: 2 }}>{sub}</div>}
       </div>
-      <div style={{ color: C.muted, fontSize: 14, fontFamily: "monospace" }}>${value.toFixed(2)}</div>
+      <div style={{ color: "#6b8fa8", fontSize: 14, fontFamily: "monospace" }}>${value.toFixed(2)}</div>
     </div>
   );
 
@@ -633,8 +633,8 @@ function QuoteModal({ project, settings, onClose }) {
     <Modal title="📋  Quote Summary" onClose={onClose} width={480}>
       <div style={{ background: "#040b12", border: `1px solid ${C.border}`, borderRadius: 6, padding: "14px 16px", marginBottom: 20 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18, color: "#e0f4ff" }}>{project.name}</div>
-        {project.description && <div style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>{project.description}</div>}
-        <div style={{ color: C.dim, fontSize: 10, marginTop: 6 }}>Generated {new Date().toLocaleDateString()}</div>
+        {project.description && <div style={{ color: "#6b8fa8", fontSize: 11, marginTop: 3 }}>{project.description}</div>}
+        <div style={{ color: "#6b8fa8", fontSize: 10, marginTop: 6 }}>Generated {new Date().toLocaleDateString()}</div>
       </div>
 
       <Line label="Parts & Materials"   value={partsCost} sub={`${parts.length} line items`} />
@@ -642,12 +642,12 @@ function QuoteModal({ project, settings, onClose }) {
       <Line label="Delivery / Shipping" value={delCost}   sub={`${delivery.filter(d => n2(d.amount) > 0).length} vendor(s)`} />
 
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ color: C.muted, fontSize: 13 }}>Total Cost</span>
+        <span style={{ color: "#6b8fa8", fontSize: 13 }}>Total Cost</span>
         <span style={{ color: C.text, fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>${totalCost.toFixed(2)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-        <span style={{ color: C.dim, fontSize: 12 }}>Markup ({mu}%)</span>
-        <span style={{ color: C.dim, fontSize: 12, fontFamily: "monospace" }}>+${(price - totalCost).toFixed(2)}</span>
+        <span style={{ color: "#6b8fa8", fontSize: 12 }}>Markup ({mu}%)</span>
+        <span style={{ color: "#6b8fa8", fontSize: 12, fontFamily: "monospace" }}>+${(price - totalCost).toFixed(2)}</span>
       </div>
 
       <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -660,7 +660,7 @@ function QuoteModal({ project, settings, onClose }) {
         <div key={v.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 9, fontSize: 12, alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Badge vendorId={v.id} />
-            <span style={{ color: C.dim }}>parts + ship</span>
+            <span style={{ color: "#6b8fa8" }}>parts + ship</span>
           </div>
           <span style={{ color: C.text, fontFamily: "monospace" }}>${(v.parts + v.delivery).toFixed(2)}</span>
         </div>
@@ -820,7 +820,7 @@ export default function App() {
 
           <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
             <button onClick={() => setShowAddProj(true)} style={{ ...btnPrimary, width: "100%", textAlign: "center" }}>+ New Project</button>
-            <button onClick={() => setShowSettings(true)} style={{ ...btnGhost, width: "100%", textAlign: "center", fontSize: 10 }}>
+            <button onClick={() => setShowSettings(true)} style={{ ...btnGhost, width: "100%", textAlign: "center", fontSize: 10, color: "#6b8fa8" }}>
               ⚙️ Settings · ${settings.laborRate}/hr · {settings.defaultMarkup}% markup
             </button>
             <button onClick={() => setShowFilamentLib(true)} style={{ ...btnGhost, width: "100%", textAlign: "center", fontSize: 10, color: C.green, borderColor: C.green + "44" }}>
@@ -868,7 +868,7 @@ export default function App() {
               {/* Table */}
               <div style={{ flex: 1, overflowY: "auto" }}>
                 {filtered.length === 0 ? (
-                  <div style={{ textAlign: "center", color: C.dim, padding: "60px 0", fontSize: 12 }}>
+                  <div style={{ textAlign: "center", color: "#6b8fa8", padding: "60px 0", fontSize: 12 }}>
                     {search ? "No parts match." : "No parts yet — click Add Part to start your BOM."}
                   </div>
                 ) : (
@@ -920,7 +920,7 @@ export default function App() {
                             <td style={{ padding: "9px 10px", fontSize: 11 }}>
                               {asm > 0 ? <span style={{ color: C.purple }}>{asm.toFixed(0)}m</span> : <span style={{ color: C.faint }}>—</span>}
                             </td>
-                            <td style={{ padding: "9px 10px", color: C.muted, fontSize: 11, maxWidth: 160 }}>
+                            <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 11, maxWidth: 160 }}>
                               {part.notes || <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px" }}>
@@ -950,7 +950,7 @@ export default function App() {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: C.dim }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: "#6b8fa8" }}>
               <div style={{ fontSize: 40 }}>🔩</div>
               <div style={{ fontSize: 12 }}>No project selected</div>
               <button onClick={() => setShowAddProj(true)} style={btnPrimary}>+ Create First Project</button>
@@ -971,7 +971,7 @@ export default function App() {
 
       {deleteConfirm && (
         <Modal title="Delete Project" onClose={() => setDeleteConfirm(null)} width={360}>
-          <p style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>
+          <p style={{ color: "#6b8fa8", fontSize: 13, marginBottom: 20 }}>
             Delete <strong style={{ color: "#e0f4ff" }}>{projects.find(p => p.id === deleteConfirm)?.name}</strong>? This cannot be undone.
           </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
