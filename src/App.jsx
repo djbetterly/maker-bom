@@ -51,13 +51,31 @@ const EMPTY_CALC = {
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function n2(v) { const f = parseFloat(v); return isNaN(f) ? 0 : f; }
 
-// ─── LOCAL STORAGE ────────────────────────────────────────────────────────────
+// ─── STORAGE (localStorage + Redis sync) ──────────────────────────────────────
 function lsGet(key) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
   catch { return null; }
 }
 function lsSet(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+async function apiGet() {
+  try {
+    const r = await fetch("/api/data");
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function apiSet(key, value) {
+  try {
+    await fetch("/api/data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+  } catch {}
 }
 
 // ─── SEED DATA ────────────────────────────────────────────────────────────────
@@ -427,10 +445,60 @@ function SettingsModal({ settings, onSave, onClose }) {
 }
 
 // ─── PART MODAL ───────────────────────────────────────────────────────────────
+// ─── URL PART NUMBER EXTRACTOR ───────────────────────────────────────────────
+function extractFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace("www.", "");
+    const path = u.pathname.replace(/\/+$/, ""); // strip trailing slash
+
+    // McMaster-Carr: mcmaster.com/91292A113/ or mcmaster.com/products/name/91292A113/
+    if (host.includes("mcmaster.com")) {
+      const match = path.match(/\/([A-Z0-9]{5,12})\/?$/i);
+      if (match) return { vendor: "mcmaster", partNumber: match[1].toUpperCase() };
+    }
+
+    // Send Cut Send: sendcutsend.com — no standard part# in URL, but detect vendor
+    if (host.includes("sendcutsend.com")) {
+      return { vendor: "sendcutsend", partNumber: "" };
+    }
+
+    // FramingTech: framingtech.com
+    if (host.includes("framingtech.com")) {
+      const match = path.match(/\/([A-Z0-9\-]{3,20})\/?$/i);
+      return { vendor: "framingtech", partNumber: match ? match[1].toUpperCase() : "" };
+    }
+
+    // Bambu Labs: bambulab.com
+    if (host.includes("bambulab.com")) {
+      return { vendor: "bambu", partNumber: "" };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function PartModal({ initial, settings, filaments, onSave, onClose }) {
   const [form, setForm]     = useState(initial ?? EMPTY_PART);
   const [showCalc, setShowCalc] = useState(false);
+  const [urlHint, setUrlHint] = useState(null);
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const handleUrl = e => {
+    const url = e.target.value;
+    const extracted = url ? extractFromUrl(url) : null;
+    setForm(p => ({
+      ...p,
+      url,
+      ...(extracted ? {
+        vendor: extracted.vendor || p.vendor,
+        partNumber: extracted.partNumber || p.partNumber,
+      } : {}),
+    }));
+    if (extracted) setUrlHint(extracted);
+    else setUrlHint(null);
+  };
   const tog = k => () => setForm(p => ({ ...p, [k]: !p[k] }));
   const is3D        = form.type === "3d_printed";
   const isPurchased = form.type === "purchased";
@@ -498,7 +566,15 @@ function PartModal({ initial, settings, filaments, onSave, onClose }) {
 
           {isPurchased && (
             <div style={{ gridColumn: "1/-1" }}>
-              <F label="URL"><input style={inp} value={form.url} onChange={set("url")} placeholder="https://…" /></F>
+              <F label="URL — paste to auto-detect vendor & part number">
+                <input style={inp} value={form.url} onChange={handleUrl} placeholder="https://www.mcmaster.com/91292A113/" />
+                {urlHint && (
+                  <div style={{ marginTop: 5, fontSize: 10, color: C.green, fontFamily: "monospace" }}>
+                    ✓ Detected {VENDORS.find(v => v.id === urlHint.vendor)?.label ?? urlHint.vendor}
+                    {urlHint.partNumber ? ` · Part # ${urlHint.partNumber}` : " · no part number in URL"}
+                  </div>
+                )}
+              </F>
             </div>
           )}
 
@@ -548,6 +624,20 @@ function PartModal({ initial, settings, filaments, onSave, onClose }) {
 function ProjectModal({ initial, onSave, onClose }) {
   const [form, setForm] = useState(initial ?? { name: "", description: "" });
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const handleUrl = e => {
+    const url = e.target.value;
+    const extracted = url ? extractFromUrl(url) : null;
+    setForm(p => ({
+      ...p,
+      url,
+      ...(extracted ? {
+        vendor: extracted.vendor || p.vendor,
+        partNumber: extracted.partNumber || p.partNumber,
+      } : {}),
+    }));
+    if (extracted) setUrlHint(extracted);
+    else setUrlHint(null);
+  };
   return (
     <Modal title={initial ? "Edit Project" : "New Project"} onClose={onClose} width={440}>
       <F label="Project Name">
@@ -688,6 +778,7 @@ export default function App() {
   const [filaments,      setFilaments]      = useState([]);
   const [selected,       setSelected]       = useState(null);
   const [loaded,         setLoaded]         = useState(false);
+  const [syncStatus,     setSyncStatus]     = useState("idle"); // idle | syncing | ok | error
   const [search,         setSearch]         = useState("");
   const [showAddProj,    setShowAddProj]    = useState(false);
   const [editProj,       setEditProj]       = useState(null);
@@ -699,22 +790,39 @@ export default function App() {
   const [showQuote,      setShowQuote]      = useState(false);
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);
 
-  // Load from localStorage
+  // Load: Redis first, fall back to localStorage
   useEffect(() => {
-    const p  = lsGet("maker_bom_projects");
-    const s  = lsGet("maker_bom_settings");
-    const fl = lsGet("maker_bom_filaments");
-    const projs = p ?? SEED;
-    setProjects(projs);
-    if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
-    setFilaments(fl ?? SEED_FILAMENTS);
-    if (projs.length) setSelected(projs[0].id);
-    setLoaded(true);
+    (async () => {
+      const remote = await apiGet();
+      const p  = remote?.projects  ?? lsGet("maker_bom_projects");
+      const s  = remote?.settings  ?? lsGet("maker_bom_settings");
+      const fl = remote?.filaments ?? lsGet("maker_bom_filaments");
+      const projs = p ?? SEED;
+      setProjects(projs);
+      if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
+      setFilaments(fl ?? SEED_FILAMENTS);
+      if (projs.length) setSelected(projs[0].id);
+      if (remote?.projects)  lsSet("maker_bom_projects",  remote.projects);
+      if (remote?.settings)  lsSet("maker_bom_settings",  remote.settings);
+      if (remote?.filaments) lsSet("maker_bom_filaments", remote.filaments);
+      setLoaded(true);
+    })();
   }, []);
 
-  const persist        = useCallback((next) => { setProjects(next);  lsSet("maker_bom_projects",  next); }, []);
-  const saveSettings   = useCallback((s)    => { setSettings(s);     lsSet("maker_bom_settings",  s);   }, []);
-  const saveFilaments  = useCallback((fl)   => { setFilaments(fl);   lsSet("maker_bom_filaments", fl);  }, []);
+  const syncToRedis = useCallback(async (key, value) => {
+    setSyncStatus("syncing");
+    try {
+      await apiSet(key, value);
+      setSyncStatus("ok");
+      setTimeout(() => setSyncStatus("idle"), 2000);
+    } catch {
+      setSyncStatus("error");
+    }
+  }, []);
+
+  const persist       = useCallback((next) => { setProjects(next); lsSet("maker_bom_projects", next); syncToRedis("maker_bom_projects", next); }, [syncToRedis]);
+  const saveSettings  = useCallback((s)    => { setSettings(s);    lsSet("maker_bom_settings", s);   syncToRedis("maker_bom_settings", s);   }, [syncToRedis]);
+  const saveFilaments = useCallback((fl)   => { setFilaments(fl);  lsSet("maker_bom_filaments", fl); syncToRedis("maker_bom_filaments", fl); }, [syncToRedis]);
 
   const active   = projects.find(p => p.id === selected);
   const parts    = active?.parts    ?? [];
@@ -798,7 +906,11 @@ export default function App() {
         {/* ── SIDEBAR ── */}
         <div style={{ width: 228, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "18px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
+              <span title={syncStatus === "syncing" ? "Syncing…" : syncStatus === "ok" ? "Synced" : syncStatus === "error" ? "Sync error" : ""}
+                style={{ width: 7, height: 7, borderRadius: "50%", background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2, display: "inline-block", flexShrink: 0 }} />
+            </div>
             <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v2.0</div>
           </div>
 
