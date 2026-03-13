@@ -188,6 +188,176 @@ function extractFromUrl(url) {
   } catch { return null; }
 }
 
+// ─── INVOICE IMPORT MODAL ────────────────────────────────────────────────────
+function InvoiceImportModal({ catalog, onImport, onClose }) {
+  const [stage, setStage]     = useState("upload"); // upload | processing | review
+  const [items, setItems]     = useState([]);
+  const [selected, setSelected] = useState({});
+  const [error, setError]     = useState(null);
+  const [filename, setFilename] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFilename(file.name);
+    setStage("processing");
+    setError(null);
+
+    // Read as base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    try {
+      const res = await fetch("/api/invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdfBase64: base64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+
+      // Match against existing catalog by part number
+      const enriched = data.parts.map(p => {
+        const existing = catalog.find(c => c.partNumber && c.partNumber === p.partNumber);
+        let status = "new";
+        if (existing) {
+          const oldCost = parseFloat(existing.unitCost);
+          const newCost = parseFloat(p.unitCost);
+          status = Math.abs(oldCost - newCost) > 0.0001 ? "price_changed" : "exists";
+        }
+        return { ...p, status, existingId: existing?.id ?? null };
+      });
+
+      setItems(enriched);
+      // Pre-select new and price_changed items
+      const sel = {};
+      enriched.forEach((item, i) => {
+        if (item.status !== "exists") sel[i] = true;
+      });
+      setSelected(sel);
+      setStage("review");
+    } catch (err) {
+      setError(err.message);
+      setStage("upload");
+    }
+  }
+
+  function toggleAll(val) {
+    const sel = {};
+    items.forEach((_, i) => { sel[i] = val; });
+    setSelected(sel);
+  }
+
+  function confirm() {
+    const toImport = items.filter((_, i) => selected[i]);
+    onImport(toImport);
+  }
+
+  const statusLabel = {
+    new:           { label: "New",           color: C.green  },
+    price_changed: { label: "Price changed", color: C.yellow },
+    exists:        { label: "Already exists",color: C.faint  },
+  };
+
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
+  return (
+    <Modal title="📄  Import McMaster Invoice" onClose={onClose} width={780}>
+      {stage === "upload" && (
+        <div style={{ textAlign: "center", padding: "40px 0" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>📄</div>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 8 }}>Upload a McMaster-Carr invoice PDF</div>
+          <div style={{ color: "#6b8fa8", fontSize: 11, marginBottom: 24 }}>Claude will extract all line items and match them against your catalog</div>
+          {error && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, padding: "10px 16px" }}>⚠ {error}</div>}
+          <label style={{ ...btnPrimary, display: "inline-block", cursor: "pointer", padding: "10px 24px" }}>
+            Choose PDF
+            <input type="file" accept=".pdf" onChange={handleFile} style={{ display: "none" }} />
+          </label>
+        </div>
+      )}
+
+      {stage === "processing" && (
+        <div style={{ textAlign: "center", padding: "60px 0" }}>
+          <div style={{ color: C.accent, fontSize: 13, marginBottom: 8 }}>Reading {filename}…</div>
+          <div style={{ color: "#6b8fa8", fontSize: 11 }}>Claude is extracting line items from your invoice</div>
+          <div style={{ marginTop: 24, display: "flex", justifyContent: "center", gap: 6 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent, opacity: 0.4, animation: `pulse 1.2s ${i*0.2}s infinite` }} />
+            ))}
+          </div>
+          <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
+        </div>
+      )}
+
+      {stage === "review" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ color: "#6b8fa8", fontSize: 11 }}>
+              Found <strong style={{ color: C.text }}>{items.length}</strong> line items in <strong style={{ color: C.text }}>{filename}</strong>
+            </div>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => toggleAll(true)}  style={{ ...btnGhost, padding: "4px 10px", fontSize: 10 }}>Select all</button>
+            <button onClick={() => toggleAll(false)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 10 }}>Clear</button>
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+            <thead>
+              <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                <th style={{ padding: "6px 8px", borderBottom: `1px solid ${C.border}`, width: 28 }}></th>
+                {["Status","Name","Part #","Pkg","Unit Cost","Notes"].map((h,i) => (
+                  <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => {
+                const st = statusLabel[item.status];
+                const isChecked = !!selected[i];
+                return (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, opacity: item.status === "exists" && !isChecked ? 0.45 : 1 }}>
+                    <td style={{ padding: "9px 8px" }}>
+                      <input type="checkbox" checked={isChecked} onChange={() => setSelected(s => ({ ...s, [i]: !s[i] }))} />
+                    </td>
+                    <td style={{ padding: "9px 8px" }}>
+                      <span style={{ background: st.color + "22", color: st.color, border: `1px solid ${st.color}44`, borderRadius: 3, padding: "2px 6px", fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {st.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{item.name}</td>
+                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>{item.partNumber || "—"}</td>
+                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>
+                      {item.pkgQty > 1 ? `${item.pkgQty} @ $${n2(item.pkgPrice).toFixed(2)}` : "—"}
+                    </td>
+                    <td style={{ padding: "9px 8px", color: C.accent, fontSize: 12, fontFamily: "monospace" }}>${n2(item.unitCost).toFixed(4)}/ea</td>
+                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11 }}>{item.notes || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+            <div style={{ color: "#6b8fa8", fontSize: 11 }}>
+              {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected —&nbsp;
+              <span style={{ color: C.green }}>{items.filter((_,i) => selected[i] && items[i].status === "new").length} new</span>,&nbsp;
+              <span style={{ color: C.yellow }}>{items.filter((_,i) => selected[i] && items[i].status === "price_changed").length} price updates</span>
+            </div>
+            <div style={{ flex: 1 }} />
+            <button onClick={onClose} style={btnGhost}>Cancel</button>
+            <button onClick={confirm} style={{ ...btnPrimary, opacity: selectedCount ? 1 : 0.4 }} disabled={!selectedCount}>
+              Import {selectedCount} part{selectedCount !== 1 ? "s" : ""} → Catalog
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 // ─── PARTS CATALOG MODAL ──────────────────────────────────────────────────────
 function CatalogModal({ catalog, onSave, onClose }) {
   const [list, setList]       = useState(catalog);
@@ -215,7 +385,37 @@ function CatalogModal({ catalog, onSave, onClose }) {
     const ex = url ? extractFromUrl(url) : null;
     setForm(p => ({ ...p, url, ...(ex ? { vendor: ex.vendor || p.vendor, partNumber: ex.partNumber || p.partNumber } : {}) }));
   };
+  const [showImport, setShowImport] = useState(false);
   const filtered = list.filter(c => !search || [c.name, c.partNumber, c.notes].some(v => v?.toLowerCase().includes(search.toLowerCase())));
+
+  function handleInvoiceImport(items) {
+    setList(existing => {
+      let updated = [...existing];
+      items.forEach(item => {
+        const idx = updated.findIndex(c => c.partNumber && c.partNumber === item.partNumber);
+        if (idx >= 0) {
+          // Update price on existing
+          updated[idx] = { ...updated[idx], pkgQty: item.pkgQty, pkgPrice: String(item.pkgPrice), unitCost: String(item.unitCost) };
+        } else {
+          // Add new
+          updated.push({
+            id: uid(),
+            name: item.name,
+            vendor: "mcmaster",
+            partNumber: item.partNumber || "",
+            url: item.partNumber ? \`https://www.mcmaster.com/\${item.partNumber}/\` : "",
+            pkgQty: item.pkgQty || 1,
+            pkgPrice: String(item.pkgPrice || ""),
+            unitCost: String(item.unitCost || ""),
+            isStock: true,
+            notes: item.notes || "",
+          });
+        }
+      });
+      return updated;
+    });
+    setShowImport(false);
+  }
 
   return (
     <Modal title="🗂  Parts Catalog" onClose={onClose} width={760}>
@@ -223,7 +423,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
         <input style={{ ...inp, width: 220 }} placeholder="Search by name or part #…" value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ flex: 1 }} />
         <span style={{ color: "#6b8fa8", fontSize: 11 }}>{list.length} parts</span>
-        {!editing && <button onClick={startNew} style={btnPrimary}>+ Add Part</button>}
+        {!editing && <><button onClick={() => setShowImport(true)} style={{ ...btnGhost, color: C.yellow, borderColor: C.yellow + "44" }}>📄 Import Invoice</button><button onClick={startNew} style={btnPrimary}>+ Add Part</button></>}
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
@@ -322,6 +522,14 @@ function CatalogModal({ catalog, onSave, onClose }) {
         <button onClick={onClose} style={btnGhost}>Cancel</button>
         <button onClick={() => onSave(list)} style={btnPrimary}>Save Catalog</button>
       </div>
+
+      {showImport && (
+        <InvoiceImportModal
+          catalog={list}
+          onImport={handleInvoiceImport}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </Modal>
   );
 }
@@ -795,6 +1003,7 @@ export default function App() {
   const [showSettings,    setShowSettings]    = useState(false);
   const [showFilamentLib, setShowFilamentLib] = useState(false);
   const [showCatalog,     setShowCatalog]     = useState(false);
+  const [showInvoice,    setShowInvoice]    = useState(false);
   const [showDelivery,    setShowDelivery]    = useState(false);
   const [showQuote,       setShowQuote]       = useState(false);
   const [deleteConfirm,   setDeleteConfirm]   = useState(null);
