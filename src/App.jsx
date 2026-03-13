@@ -403,7 +403,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
             name: item.name,
             vendor: "mcmaster",
             partNumber: item.partNumber || "",
-            url: item.partNumber ? \`https://www.mcmaster.com/\${item.partNumber}/\` : "",
+            url: item.partNumber ? `https://www.mcmaster.com/${item.partNumber}/` : "",
             pkgQty: item.pkgQty || 1,
             pkgPrice: String(item.pkgPrice || ""),
             unitCost: String(item.unitCost || ""),
