@@ -32,18 +32,18 @@ const SEED_FILAMENTS = [
 ];
 
 const SEED_CATALOG = [
-  { id:"cat1", name:"M3×8 SHCS",          vendor:"mcmaster",   partNumber:"91292A113", url:"https://www.mcmaster.com/91292A113/", unitCost:"0.09", isStock:true,  notes:"Socket head cap screw" },
-  { id:"cat2", name:"M3×12 SHCS",         vendor:"mcmaster",   partNumber:"91292A115", url:"",                                    unitCost:"0.10", isStock:true,  notes:"" },
-  { id:"cat3", name:"M3×16 SHCS",         vendor:"mcmaster",   partNumber:"91292A117", url:"",                                    unitCost:"0.11", isStock:true,  notes:"" },
-  { id:"cat4", name:"M4×10 SHCS",         vendor:"mcmaster",   partNumber:"91292A194", url:"",                                    unitCost:"0.14", isStock:true,  notes:"" },
-  { id:"cat5", name:"M5×16 SHCS",         vendor:"mcmaster",   partNumber:"91292A128", url:"",                                    unitCost:"0.18", isStock:true,  notes:"" },
-  { id:"cat6", name:"Heat-Set Insert M3", vendor:"mcmaster",   partNumber:"94180A333", url:"",                                    unitCost:"0.22", isStock:true,  notes:"For 3D printed parts" },
-  { id:"cat7", name:"Heat-Set Insert M4", vendor:"mcmaster",   partNumber:"94180A353", url:"",                                    unitCost:"0.35", isStock:true,  notes:"" },
-  { id:"cat8", name:"Hex Nut M3",         vendor:"mcmaster",   partNumber:"90592A085", url:"",                                    unitCost:"0.04", isStock:true,  notes:"" },
-  { id:"cat9", name:"Hex Nut M4",         vendor:"mcmaster",   partNumber:"90592A105", url:"",                                    unitCost:"0.06", isStock:true,  notes:"" },
-  { id:"catA", name:"M3 Flat Washer",     vendor:"mcmaster",   partNumber:"91166A210", url:"",                                    unitCost:"0.03", isStock:true,  notes:"" },
-  { id:"catB", name:"M4 T-Nut",          vendor:"framingtech", partNumber:"",          url:"",                                    unitCost:"0.15", isStock:true,  notes:"For aluminum extrusion" },
-  { id:"catC", name:"Leveling Foot",      vendor:"mcmaster",   partNumber:"60945K52",  url:"",                                    unitCost:"1.45", isStock:false, notes:"M4 thread, 30mm dia" },
+  { id:"cat1", name:"M3×8 SHCS",          vendor:"mcmaster",   partNumber:"91292A113", url:"https://www.mcmaster.com/91292A113/", pkgQty:100, pkgPrice:"8.74",  unitCost:"0.09", isStock:true,  notes:"Socket head cap screw" },
+  { id:"cat2", name:"M3×12 SHCS",         vendor:"mcmaster",   partNumber:"91292A115", url:"",                                    pkgQty:100, pkgPrice:"9.84",  unitCost:"0.10", isStock:true,  notes:"" },
+  { id:"cat3", name:"M3×16 SHCS",         vendor:"mcmaster",   partNumber:"91292A117", url:"",                                    pkgQty:100, pkgPrice:"10.70", unitCost:"0.11", isStock:true,  notes:"" },
+  { id:"cat4", name:"M4×10 SHCS",         vendor:"mcmaster",   partNumber:"91292A194", url:"",                                    pkgQty:100, pkgPrice:"13.97", unitCost:"0.14", isStock:true,  notes:"" },
+  { id:"cat5", name:"M5×16 SHCS",         vendor:"mcmaster",   partNumber:"91292A128", url:"",                                    pkgQty:50,  pkgPrice:"9.17",  unitCost:"0.18", isStock:true,  notes:"" },
+  { id:"cat6", name:"Heat-Set Insert M3", vendor:"mcmaster",   partNumber:"94180A333", url:"",                                    pkgQty:50,  pkgPrice:"10.84", unitCost:"0.22", isStock:true,  notes:"For 3D printed parts" },
+  { id:"cat7", name:"Heat-Set Insert M4", vendor:"mcmaster",   partNumber:"94180A353", url:"",                                    pkgQty:50,  pkgPrice:"17.62", unitCost:"0.35", isStock:true,  notes:"" },
+  { id:"cat8", name:"Hex Nut M3",         vendor:"mcmaster",   partNumber:"90592A085", url:"",                                    pkgQty:100, pkgPrice:"3.76",  unitCost:"0.04", isStock:true,  notes:"" },
+  { id:"cat9", name:"Hex Nut M4",         vendor:"mcmaster",   partNumber:"90592A105", url:"",                                    pkgQty:100, pkgPrice:"5.81",  unitCost:"0.06", isStock:true,  notes:"" },
+  { id:"catA", name:"M3 Flat Washer",     vendor:"mcmaster",   partNumber:"91166A210", url:"",                                    pkgQty:100, pkgPrice:"2.96",  unitCost:"0.03", isStock:true,  notes:"" },
+  { id:"catB", name:"M4 T-Nut",          vendor:"framingtech", partNumber:"",          url:"",                                    pkgQty:20,  pkgPrice:"3.00",  unitCost:"0.15", isStock:true,  notes:"For aluminum extrusion" },
+  { id:"catC", name:"Leveling Foot",      vendor:"mcmaster",   partNumber:"60945K52",  url:"",                                    pkgQty:1,   pkgPrice:"1.45",  unitCost:"1.45", isStock:false, notes:"M4 thread, 30mm dia" },
 ];
 
 const EMPTY_PART = {
@@ -197,12 +197,16 @@ function CatalogModal({ catalog, onSave, onClose }) {
   const setF = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
   const tog  = k => () => setForm(p => ({ ...p, [k]: !p[k] }));
 
-  function startNew() { setForm({ name: "", vendor: "mcmaster", partNumber: "", url: "", unitCost: "", isStock: false, notes: "" }); setEditing("new"); }
-  function startEdit(c) { setForm({ ...c }); setEditing(c); }
+  function startNew() { setForm({ name: "", vendor: "mcmaster", partNumber: "", url: "", pkgQty: "1", pkgPrice: "", unitCost: "", isStock: false, notes: "" }); setEditing("new"); }
+  function startEdit(c) { setForm({ pkgQty: "1", pkgPrice: "", ...c }); setEditing(c); }
   function saveForm() {
     if (!form.name.trim()) return;
-    if (editing === "new") setList(l => [...l, { ...form, id: uid() }]);
-    else setList(l => l.map(x => x.id === editing.id ? { ...x, ...form } : x));
+    const pq = parseFloat(form.pkgQty) || 1;
+    const pp = parseFloat(form.pkgPrice) || 0;
+    const derived = pp > 0 ? (pp / pq).toFixed(4) : form.unitCost;
+    const entry = { ...form, pkgQty: pq, unitCost: derived };
+    if (editing === "new") setList(l => [...l, { ...entry, id: uid() }]);
+    else setList(l => l.map(x => x.id === editing.id ? { ...x, ...entry } : x));
     setEditing(null);
   }
   function remove(id) { setList(l => l.filter(x => x.id !== id)); }
@@ -225,7 +229,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
         <thead>
           <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            {["Name","Vendor","Part #","Unit Cost","","Notes",""].map((h,i) => (
+            {["Name","Vendor","Part #","Pkg","Unit Cost","","Notes",""].map((h,i) => (
               <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
             ))}
           </tr>
@@ -236,7 +240,19 @@ function CatalogModal({ catalog, onSave, onClose }) {
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{c.name}</td>
               <td style={{ padding: "9px 8px" }}><Badge vendorId={c.vendor} /></td>
               <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>{c.partNumber || <span style={{ color: C.faint }}>—</span>}</td>
-              <td style={{ padding: "9px 8px", color: C.accent, fontSize: 12, fontFamily: "monospace" }}>${n2(c.unitCost).toFixed(2)}</td>
+              <td style={{ padding: "9px 8px" }}>
+                {c.pkgQty > 1 ? (
+                  <span style={{ color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>
+                    {c.pkgQty} @ ${n2(c.pkgPrice).toFixed(2)}
+                  </span>
+                ) : <span style={{ color: C.faint }}>—</span>}
+              </td>
+              <td style={{ padding: "9px 8px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <span style={{ color: C.accent, fontSize: 12, fontFamily: "monospace", fontWeight: 700 }}>${n2(c.unitCost).toFixed(4)}/ea</span>
+                  {c.pkgQty > 1 && <span style={{ color: C.faint, fontSize: 9 }}>pkg: ${n2(c.pkgPrice).toFixed(2)}</span>}
+                </div>
+              </td>
               <td style={{ padding: "9px 8px" }}>{c.isStock && <span style={{ background: C.yellow + "22", color: C.yellow, border: `1px solid ${C.yellow}44`, borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>STOCK</span>}</td>
               <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, maxWidth: 180 }}>{c.notes || <span style={{ color: C.faint }}>—</span>}</td>
               <td style={{ padding: "9px 8px" }}>
@@ -260,6 +276,24 @@ function CatalogModal({ catalog, onSave, onClose }) {
             <F label="Part Number"><input style={inp} value={form.partNumber} onChange={setF("partNumber")} placeholder="e.g. 91292A113" /></F>
             <F label="Unit Cost ($)"><input style={inp} type="number" step="0.01" value={form.unitCost} onChange={setF("unitCost")} placeholder="0.00" /></F>
             <div style={{ gridColumn: "1/-1" }}><F label="URL — paste to auto-detect vendor & part #"><input style={inp} value={form.url} onChange={handleUrl} placeholder="https://www.mcmaster.com/…" /></F></div>
+            <F label="Pkg Qty (units per package)">
+              <input style={inp} type="number" min="1" value={form.pkgQty} onChange={setF("pkgQty")} placeholder="e.g. 100" />
+            </F>
+            <F label="Pkg Price ($)">
+              <input style={inp} type="number" step="0.01" value={form.pkgPrice} onChange={setF("pkgPrice")} placeholder="e.g. 8.74" />
+            </F>
+            <F label="Unit Cost ($/ea)" hint={form.pkgQty && form.pkgPrice && parseFloat(form.pkgPrice) > 0 ? `Auto: $${(parseFloat(form.pkgPrice) / (parseFloat(form.pkgQty)||1)).toFixed(4)}/ea` : "Or enter manually if no pkg data"}>
+              <input style={{ ...inp, opacity: (form.pkgPrice && parseFloat(form.pkgPrice) > 0) ? 0.5 : 1 }}
+                type="number" step="0.0001" value={
+                  form.pkgPrice && parseFloat(form.pkgPrice) > 0
+                    ? (parseFloat(form.pkgPrice) / (parseFloat(form.pkgQty)||1)).toFixed(4)
+                    : form.unitCost
+                }
+                onChange={setF("unitCost")}
+                readOnly={!!(form.pkgPrice && parseFloat(form.pkgPrice) > 0)}
+                placeholder="0.0000"
+              />
+            </F>
             <div style={{ gridColumn: "1/-1" }}><F label="Notes"><input style={inp} value={form.notes} onChange={setF("notes")} placeholder="Material, spec, application…" /></F></div>
             <div style={{ gridColumn: "1/-1" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: C.text, fontSize: 12, marginBottom: 14 }}>
