@@ -361,6 +361,11 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
 // ─── PARTS CATALOG MODAL ──────────────────────────────────────────────────────
 function CatalogModal({ catalog, onSave, onClose }) {
   const [list, setList]       = useState(catalog);
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    onSave(list);
+  }, [list]);
   const [editing, setEditing] = useState(null);
   const [form, setForm]       = useState({});
   const [search, setSearch]   = useState("");
@@ -519,8 +524,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
       )}
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-        <button onClick={onClose} style={btnGhost}>Cancel</button>
-        <button onClick={() => onSave(list)} style={btnPrimary}>Save Catalog</button>
+        <button onClick={onClose} style={btnPrimary}>Done</button>
       </div>
 
       {showImport && (
