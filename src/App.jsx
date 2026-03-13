@@ -275,7 +275,16 @@ function CatalogModal({ catalog, onSave, onClose }) {
             <F label="Vendor"><select style={sel} value={form.vendor} onChange={setF("vendor")}>{VENDORS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></F>
             <F label="Part Number"><input style={inp} value={form.partNumber} onChange={setF("partNumber")} placeholder="e.g. 91292A113" /></F>
             <F label="Unit Cost ($)"><input style={inp} type="number" step="0.01" value={form.unitCost} onChange={setF("unitCost")} placeholder="0.00" /></F>
-            <div style={{ gridColumn: "1/-1" }}><F label="URL — paste to auto-detect vendor & part #"><input style={inp} value={form.url} onChange={handleUrl} placeholder="https://www.mcmaster.com/…" /></F></div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="URL — paste to auto-detect vendor & part #">
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...inp, flex: 1 }} value={form.url} onChange={handleUrl} placeholder="https://www.mcmaster.com/…" />
+                  <button type="button" onClick={() => form.url && window.open(form.url, "_blank")}
+                    style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, opacity: form.url ? 1 : 0.3, cursor: form.url ? "pointer" : "default", whiteSpace: "nowrap", flexShrink: 0 }}
+                    disabled={!form.url} title="Open URL">↗ Open</button>
+                </div>
+              </F>
+            </div>
             <F label="Pkg Qty (units per package)">
               <input style={inp} type="number" min="1" value={form.pkgQty} onChange={setF("pkgQty")} placeholder="e.g. 100" />
             </F>
