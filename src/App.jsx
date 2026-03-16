@@ -436,7 +436,7 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
 }
 
 // ─── PARTS CATALOG MODAL ──────────────────────────────────────────────────────
-function CatalogModal({ catalog, onSave, onClose }) {
+function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
   const [list, setList]       = useState(catalog);
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -467,7 +467,68 @@ function CatalogModal({ catalog, onSave, onClose }) {
     const ex = url ? extractFromUrl(url) : null;
     setForm(p => ({ ...p, url, ...(ex ? { vendor: ex.vendor || p.vendor, partNumber: ex.partNumber || p.partNumber } : {}) }));
   };
-  const [showImport, setShowImport] = useState(false);
+  const [showImport, setShowImport]       = useState(false);
+  const [localImages, setLocalImages]     = useState(imageCache || {});
+  const [batchStatus, setBatchStatus]     = useState(null); // null | {done, total, current}
+
+  async function fetchImageAsBase64(imagePath) {
+    try {
+      const r = await fetch(`/api/mcmaster-asset?path=${encodeURIComponent(imagePath)}`);
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      return await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+
+  async function batchLookup() {
+    const mcParts = list.filter(c => c.vendor === "mcmaster" && c.partNumber);
+    const todo    = mcParts.filter(c => !localImages[c.partNumber]);
+    if (!todo.length) { alert("All McMaster parts already have images!"); return; }
+
+    setBatchStatus({ done: 0, total: todo.length, current: "" });
+    const newImages = { ...localImages };
+
+    for (let i = 0; i < todo.length; i++) {
+      const part = todo[i];
+      setBatchStatus({ done: i, total: todo.length, current: part.name });
+      try {
+        // Lookup part to get imagePath
+        const res = await fetch("/api/mcmaster", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partNumber: part.partNumber }),
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+
+        // Update catalog entry with links
+        if (data.imagePath || data.cadLinks?.length || data.datasheetLinks?.length) {
+          setList(l => l.map(c => c.id === part.id ? {
+            ...c,
+            imagePath:      data.imagePath      || c.imagePath      || "",
+            cadLinks:       data.cadLinks       || c.cadLinks       || [],
+            datasheetLinks: data.datasheetLinks || c.datasheetLinks || [],
+          } : c));
+        }
+
+        // Fetch and cache the image as base64
+        if (data.imagePath) {
+          const b64 = await fetchImageAsBase64(data.imagePath);
+          if (b64) newImages[part.partNumber] = b64;
+        }
+      } catch { /* skip on error */ }
+    }
+
+    setLocalImages(newImages);
+    onSaveImages(newImages);
+    setBatchStatus({ done: todo.length, total: todo.length, current: "" });
+    setTimeout(() => setBatchStatus(null), 3000);
+  }
   const [lookupStatus, setLookupStatus] = useState(null); // null | "loading" | "ok" | "error"
   const [lookupError, setLookupError]   = useState("");
 
@@ -540,7 +601,28 @@ function CatalogModal({ catalog, onSave, onClose }) {
         <input style={{ ...inp, width: 220 }} placeholder="Search by name or part #…" value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ flex: 1 }} />
         <span style={{ color: "#6b8fa8", fontSize: 11 }}>{list.length} parts</span>
-        {!editing && <><button onClick={() => setShowImport(true)} style={{ ...btnGhost, color: C.yellow, borderColor: C.yellow + "44" }}>📄 Import Invoice</button><button onClick={startNew} style={btnPrimary}>+ Add Part</button></>}
+        {!editing && (
+          <>
+            {batchStatus ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ color: C.accent, fontSize: 11 }}>
+                  {batchStatus.done < batchStatus.total
+                    ? `Looking up ${batchStatus.done + 1}/${batchStatus.total}: ${batchStatus.current}`
+                    : `✓ Done — ${batchStatus.total} parts updated`}
+                </div>
+                <div style={{ width: 120, height: 4, background: C.border, borderRadius: 2 }}>
+                  <div style={{ width: `${(batchStatus.done / batchStatus.total) * 100}%`, height: "100%", background: C.accent, borderRadius: 2, transition: "width 0.3s" }} />
+                </div>
+              </div>
+            ) : (
+              <button onClick={batchLookup} style={{ ...btnGhost, color: C.accent, borderColor: C.accent + "44" }}>
+                🔄 Batch Lookup
+              </button>
+            )}
+            <button onClick={() => setShowImport(true)} style={{ ...btnGhost, color: C.yellow, borderColor: C.yellow + "44" }}>📄 Import Invoice</button>
+            <button onClick={startNew} style={btnPrimary}>+ Add Part</button>
+          </>
+        )}
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
@@ -556,8 +638,12 @@ function CatalogModal({ catalog, onSave, onClose }) {
             <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
               <td style={{ padding: "9px 8px", width: 72 }}>
                 {c.imagePath
-                  ? <img src={`/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}`} alt="" style={{ width: 56, height: 56, objectFit: "contain", background: "#fff", borderRadius: 6, border: `1px solid ${C.border}`, padding: 4, display: "block" }} onError={e => e.target.style.display="none"} />
-                  : <div style={{ width: 56, height: 56, background: C.border, borderRadius: 6 }} />
+                  (() => {
+                    const src = localImages[c.partNumber] || (c.imagePath ? `/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}` : null);
+                    return src
+                      ? <img src={src} alt="" style={{ width: 56, height: 56, objectFit: "contain", background: "#fff", borderRadius: 6, border: `1px solid ${C.border}`, padding: 4, display: "block" }} onError={e => e.target.style.display="none"} />
+                      : <div style={{ width: 56, height: 56, background: C.border, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 18 }}>🔩</span></div>;
+                  })()
                 }
               </td>
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{c.name}</td>
@@ -1169,6 +1255,7 @@ export default function App() {
   const [settings,        setSettings]        = useState(DEFAULT_SETTINGS);
   const [filaments,       setFilaments]       = useState([]);
   const [catalog,         setCatalog]         = useState([]);
+  const [imageCache,      setImageCache]      = useState({});
   const [selected,        setSelected]        = useState(null);
   const [loaded,          setLoaded]          = useState(false);
   const [syncStatus,      setSyncStatus]      = useState("idle");
@@ -1194,17 +1281,20 @@ export default function App() {
     const s  = remote?.settings  ?? (forceRemote ? null : lsGet("maker_bom_settings"));
     const fl = remote?.filaments ?? (forceRemote ? null : lsGet("maker_bom_filaments"));
     const ct = remote?.catalog   ?? (forceRemote ? null : lsGet("maker_bom_catalog"));
+    const ic = remote?.imageCache ?? lsGet("maker_bom_image_cache") ?? {};
     const projs = p ?? SEED;
     setProjects(projs);
     if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
     setFilaments(fl ?? SEED_FILAMENTS);
     setCatalog(ct ?? SEED_CATALOG);
+    setImageCache(ic);
     if (!selected && projs.length) setSelected(projs[0].id);
     // Warm localStorage from Redis
     if (remote?.projects)  lsSet("maker_bom_projects",  remote.projects);
     if (remote?.settings)  lsSet("maker_bom_settings",  remote.settings);
     if (remote?.filaments) lsSet("maker_bom_filaments", remote.filaments);
-    if (remote?.catalog)   lsSet("maker_bom_catalog",   remote.catalog);
+    if (remote?.catalog)    lsSet("maker_bom_catalog",    remote.catalog);
+    if (remote?.imageCache) lsSet("maker_bom_image_cache", remote.imageCache);
     setSyncStatus("ok");
     setTimeout(() => setSyncStatus("idle"), 2000);
     setLoaded(true);
@@ -1240,6 +1330,7 @@ export default function App() {
   const saveSettings  = useCallback((s)    => { setSettings(s);     lsSet("maker_bom_settings",  s);   syncToRedis("maker_bom_settings",  s);   }, [syncToRedis]);
   const saveFilaments = useCallback((fl)   => { setFilaments(fl);   lsSet("maker_bom_filaments", fl);  syncToRedis("maker_bom_filaments", fl);  }, [syncToRedis]);
   const saveCatalog   = useCallback((ct)   => { setCatalog(ct);     lsSet("maker_bom_catalog",   ct);  syncToRedis("maker_bom_catalog",   ct);  }, [syncToRedis]);
+  const saveImageCache = useCallback((ic)  => { setImageCache(ic);  lsSet("maker_bom_image_cache", ic); syncToRedis("maker_bom_image_cache", ic); }, [syncToRedis]);
 
   const active        = projects.find(p => p.id === selected);
   const rawParts      = active?.parts    ?? [];
@@ -1315,7 +1406,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.6</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.7</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1452,7 +1543,7 @@ export default function App() {
       {/* ── MODALS ── */}
       {showSettings    && <SettingsModal settings={settings} onSave={s => { saveSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
       {showFilamentLib && <FilamentLibraryModal filaments={filaments} onSave={fl => { saveFilaments(fl); setShowFilamentLib(false); }} onClose={() => setShowFilamentLib(false)} />}
-      {showCatalog     && <CatalogModal catalog={catalog} onSave={saveCatalog} onClose={() => setShowCatalog(false)} />}
+      {showCatalog     && <CatalogModal catalog={catalog} onSave={saveCatalog} imageCache={imageCache} onSaveImages={saveImageCache} onClose={() => setShowCatalog(false)} />}
       {showAddProj     && <ProjectModal onSave={addProject} onClose={() => setShowAddProj(false)} />}
       {editProj        && <ProjectModal initial={editProj} onSave={updateProject} onClose={() => setEditProj(null)} />}
       {showAddPart     && <PartModal settings={settings} filaments={filaments} catalog={catalog} onSave={addPart} onClose={() => setShowAddPart(false)} />}
