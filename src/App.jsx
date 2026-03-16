@@ -49,7 +49,7 @@ const SEED_CATALOG = [
 const EMPTY_PART = {
   id: null, name: "", type: "purchased", qty: 1, unit: "ea",
   vendor: "mcmaster", partNumber: "", url: "", files: "",
-  notes: "", unitCost: "", isStock: false, assemblyMins: 0,
+  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "",
 };
 
 const EMPTY_CALC = {
@@ -835,15 +835,24 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
             <F label="Part Number"><input style={inp} value={form.partNumber} onChange={set("partNumber")} placeholder="e.g. 91292A113" /></F>
           )}
 
-          {hasFiles && (
+          {(hasFiles || catalogItem) && (
             <div style={{ gridColumn: "1/-1" }}>
-              <F label="File References" hint="STL, DXF, or drawing filenames — comma-separated"><input style={inp} value={form.files} onChange={set("files")} placeholder="body.stl, lid_panel.dxf" /></F>
+              <F label="File References" hint="STL, DXF, or drawing filenames — comma-separated">
+                <input style={inp} value={form.files} onChange={set("files")} placeholder="body.stl, lid_panel.dxf" />
+              </F>
             </div>
           )}
-          {/* Also allow files for catalog parts (project-specific STL overrides etc.) */}
-          {catalogItem && (
+          {(hasFiles || catalogItem) && (
             <div style={{ gridColumn: "1/-1" }}>
-              <F label="File References" hint="Project-specific files — comma-separated"><input style={inp} value={form.files} onChange={set("files")} placeholder="custom_bracket.stl" /></F>
+              <F label="Fusion 360 / Design File URL" hint="Paste a Fusion 360 share link to open the design directly">
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...inp, flex: 1 }} value={form.designUrl || ""} onChange={set("designUrl")} placeholder="https://a360.co/…" />
+                  <button type="button"
+                    onClick={() => form.designUrl && window.open(form.designUrl, "_blank")}
+                    style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, opacity: form.designUrl ? 1 : 0.3, cursor: form.designUrl ? "pointer" : "default", whiteSpace: "nowrap", flexShrink: 0 }}
+                    disabled={!form.designUrl}>↗ Open</button>
+                </div>
+              </F>
             </div>
           )}
 
@@ -1210,7 +1219,8 @@ export default function App() {
                             <td style={{ padding: "9px 10px", fontSize: 11, maxWidth: 180 }}>
                               {part.partNumber && <div style={{ color: "#6b8fa8", fontWeight: 700 }}>{part.partNumber}</div>}
                               {part.files && <div style={{ color: C.green, marginTop: 2, fontSize: 10 }}>{part.files.split(",").map((f, i) => <span key={i} style={{ marginRight: 6 }}>📄 {f.trim()}</span>)}</div>}
-                              {!part.partNumber && !part.files && <span style={{ color: C.faint }}>—</span>}
+                              {part.designUrl && <div style={{ marginTop: 3 }}><a href={part.designUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>↗ Fusion 360</a></div>}
+                              {!part.partNumber && !part.files && !part.designUrl && <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
                             <td style={{ padding: "9px 10px", color: tot > 0 ? C.accent : C.faint, fontSize: 12, fontWeight: 700 }}>{tot > 0 ? `$${tot.toFixed(2)}` : "—"}</td>
@@ -1251,7 +1261,7 @@ export default function App() {
       {/* ── MODALS ── */}
       {showSettings    && <SettingsModal settings={settings} onSave={s => { saveSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
       {showFilamentLib && <FilamentLibraryModal filaments={filaments} onSave={fl => { saveFilaments(fl); setShowFilamentLib(false); }} onClose={() => setShowFilamentLib(false)} />}
-      {showCatalog     && <CatalogModal catalog={catalog} onSave={ct => { saveCatalog(ct); setShowCatalog(false); }} onClose={() => setShowCatalog(false)} />}
+      {showCatalog     && <CatalogModal catalog={catalog} onSave={saveCatalog} onClose={() => setShowCatalog(false)} />}
       {showAddProj     && <ProjectModal onSave={addProject} onClose={() => setShowAddProj(false)} />}
       {editProj        && <ProjectModal initial={editProj} onSave={updateProject} onClose={() => setEditProj(null)} />}
       {showAddPart     && <PartModal settings={settings} filaments={filaments} catalog={catalog} onSave={addPart} onClose={() => setShowAddPart(false)} />}
