@@ -25,14 +25,16 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      const [projects, settings, filaments, catalog] = await Promise.all(
-        KEYS.map(k => redis.get(k))
-      );
+      const [projects, settings, filaments, catalog, imageCache] = await Promise.all([
+        ...KEYS.map(k => redis.get(k)),
+        redis.get("maker_bom_image_cache"),
+      ]);
       return res.status(200).json({
-        projects:  projects  ? JSON.parse(projects)  : null,
-        settings:  settings  ? JSON.parse(settings)  : null,
-        filaments: filaments ? JSON.parse(filaments) : null,
-        catalog:   catalog   ? JSON.parse(catalog)   : null,
+        projects:   projects   ? JSON.parse(projects)   : null,
+        settings:   settings   ? JSON.parse(settings)   : null,
+        filaments:  filaments  ? JSON.parse(filaments)  : null,
+        catalog:    catalog    ? JSON.parse(catalog)    : null,
+        imageCache: imageCache ? JSON.parse(imageCache) : {},
       });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
