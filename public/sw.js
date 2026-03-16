@@ -1,4 +1,4 @@
-const CACHE = "maker-bom-v1";
+const CACHE = "maker-bom-v2";
 const PRECACHE = ["/", "/index.html"];
 
 self.addEventListener("install", e => {
