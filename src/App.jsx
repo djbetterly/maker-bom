@@ -468,6 +468,38 @@ function CatalogModal({ catalog, onSave, onClose }) {
     setForm(p => ({ ...p, url, ...(ex ? { vendor: ex.vendor || p.vendor, partNumber: ex.partNumber || p.partNumber } : {}) }));
   };
   const [showImport, setShowImport] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState(null); // null | "loading" | "ok" | "error"
+  const [lookupError, setLookupError]   = useState("");
+
+  async function lookupMcMaster() {
+    if (!form.partNumber?.trim()) return;
+    setLookupStatus("loading");
+    setLookupError("");
+    try {
+      const res = await fetch("/api/mcmaster", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partNumber: form.partNumber.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Lookup failed");
+      // Fill in form fields from API response
+      const lowestPrice = data.priceTiers?.[0];
+      setForm(p => ({
+        ...p,
+        name:       data.name || p.name,
+        url:        data.url  || p.url,
+        vendor:     "mcmaster",
+        pkgQty:     lowestPrice ? String(lowestPrice.qty)   : p.pkgQty,
+        pkgPrice:   lowestPrice ? String(lowestPrice.price) : p.pkgPrice,
+        unitPrice:  lowestPrice ? String(lowestPrice.price) : p.unitCost,
+      }));
+      setLookupStatus("ok");
+    } catch (err) {
+      setLookupError(err.message);
+      setLookupStatus("error");
+    }
+  }
   const filtered = list.filter(c => !search || [c.name, c.partNumber, c.notes].some(v => v?.toLowerCase().includes(search.toLowerCase())));
 
   function handleInvoiceImport(items) {
@@ -555,7 +587,21 @@ function CatalogModal({ catalog, onSave, onClose }) {
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0 16px" }}>
             <div style={{ gridColumn: "1/-1" }}><F label="Part Name"><input style={inp} value={form.name} onChange={setF("name")} placeholder="e.g. M3×8 SHCS" autoFocus /></F></div>
             <F label="Vendor"><select style={sel} value={form.vendor} onChange={setF("vendor")}>{VENDORS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></F>
-            <F label="Part Number"><input style={inp} value={form.partNumber} onChange={setF("partNumber")} placeholder="e.g. 91292A113" /></F>
+            <F label="Part Number">
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...inp, flex: 1 }} value={form.partNumber} onChange={e => { setF("partNumber")(e); setLookupStatus(null); }} placeholder="e.g. 91292A113" />
+                <button type="button" onClick={lookupMcMaster}
+                  disabled={!form.partNumber?.trim() || lookupStatus === "loading" || form.vendor !== "mcmaster"}
+                  style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, whiteSpace: "nowrap", flexShrink: 0,
+                    color: lookupStatus === "ok" ? C.green : lookupStatus === "error" ? C.red : C.accent,
+                    borderColor: lookupStatus === "ok" ? C.green + "44" : lookupStatus === "error" ? C.red + "44" : C.accent + "44",
+                    opacity: (!form.partNumber?.trim() || form.vendor !== "mcmaster") ? 0.3 : 1,
+                  }}>
+                  {lookupStatus === "loading" ? "…" : lookupStatus === "ok" ? "✓ Found" : lookupStatus === "error" ? "✗ Error" : "🔍 Lookup"}
+                </button>
+              </div>
+              {lookupStatus === "error" && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{lookupError}</div>}
+            </F>
             <F label="Unit Cost ($)"><input style={inp} type="number" step="0.01" value={form.unitCost} onChange={setF("unitCost")} placeholder="0.00" /></F>
             <div style={{ gridColumn: "1/-1" }}>
               <F label="URL — paste to auto-detect vendor & part #">
