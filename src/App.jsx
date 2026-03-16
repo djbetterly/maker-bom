@@ -1054,6 +1054,24 @@ export default function App() {
     catch { setSyncStatus("error"); }
   }, []);
 
+  async function pushLocalToCloud() {
+    setSyncStatus("syncing");
+    try {
+      await Promise.all([
+        apiSet("maker_bom_projects",  projects),
+        apiSet("maker_bom_settings",  settings),
+        apiSet("maker_bom_filaments", filaments),
+        apiSet("maker_bom_catalog",   catalog),
+      ]);
+      setSyncStatus("ok");
+      setTimeout(() => setSyncStatus("idle"), 2000);
+      alert("All local data pushed to cloud successfully!");
+    } catch(e) {
+      setSyncStatus("error");
+      alert("Push failed: " + e.message);
+    }
+  }
+
   const persist       = useCallback((next) => { setProjects(next);  lsSet("maker_bom_projects",  next); syncToRedis("maker_bom_projects",  next); }, [syncToRedis]);
   const saveSettings  = useCallback((s)    => { setSettings(s);     lsSet("maker_bom_settings",  s);   syncToRedis("maker_bom_settings",  s);   }, [syncToRedis]);
   const saveFilaments = useCallback((fl)   => { setFilaments(fl);   lsSet("maker_bom_filaments", fl);  syncToRedis("maker_bom_filaments", fl);  }, [syncToRedis]);
@@ -1127,12 +1145,13 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => loadData(true)} title="Refresh from cloud" style={{ background: "none", border: "none", color: "#6b8fa8", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}>↺</button>
+                <button onClick={() => loadData(true)} title="Pull from cloud" style={{ background: "none", border: "none", color: "#6b8fa8", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}>↺</button>
+                <button onClick={pushLocalToCloud} title="Push local data to cloud" style={{ background: "none", border: "none", color: C.yellow, cursor: "pointer", fontSize: 11, lineHeight: 1, padding: 0, fontFamily: "monospace", fontWeight: 700 }}>↑</button>
                 <span title={syncStatus === "syncing" ? "Syncing…" : syncStatus === "ok" ? "Synced" : syncStatus === "error" ? "Sync error" : ""}
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.2</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.3</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
