@@ -1,4 +1,4 @@
-// api/upload-stl.js — Upload STL/3D files to Vercel Blob
+// api/upload-stl.js — Upload STL/3D files to Vercel Blob (public store)
 import { put } from "@vercel/blob";
 
 export const config = { api: { bodyParser: false } };
@@ -13,9 +13,8 @@ export default async function handler(req, res) {
   const filename = req.headers["x-filename"] || "model.stl";
 
   try {
-    // Stream the body directly to Vercel Blob
     const blob = await put(`stl-files/${filename}`, req, {
-      
+      access: "public",
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });
     return res.status(200).json({ url: blob.url, filename });
