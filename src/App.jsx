@@ -155,7 +155,7 @@ function HR({ label }) {
 function Modal({ title, onClose, width = 540, children }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#00000099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(3px)" }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#0a1520", border: `1px solid ${C.border2}`, borderRadius: 8, width: `min(96vw, ${width}px)`, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 64px #000e" }}>
+      <div style={{ background: "#0a1520", border: `1px solid ${C.border2}`, borderRadius: 8, width: `min(98vw, ${width}px)`, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 64px #000e" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px 12px", borderBottom: `1px solid ${C.border}` }}>
           <span style={{ color: C.accent, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#6b8fa8", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
@@ -535,7 +535,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
   }
 
   return (
-    <Modal title="🗂  Parts Catalog" onClose={onClose} width={760}>
+    <Modal title="🗂  Parts Catalog" onClose={onClose} width={1060}>
       <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
         <input style={{ ...inp, width: 220 }} placeholder="Search by name or part #…" value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ flex: 1 }} />
@@ -554,10 +554,10 @@ function CatalogModal({ catalog, onSave, onClose }) {
         <tbody>
           {filtered.map(c => (
             <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-              <td style={{ padding: "9px 8px", width: 44 }}>
+              <td style={{ padding: "9px 8px", width: 72 }}>
                 {c.imagePath
-                  ? <img src={`/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}`} alt="" style={{ width: 36, height: 36, objectFit: "contain", background: "#fff", borderRadius: 4, border: `1px solid ${C.border}`, padding: 2, display: "block" }} onError={e => e.target.style.display="none"} />
-                  : <div style={{ width: 36, height: 36, background: C.border, borderRadius: 4 }} />
+                  ? <img src={`/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}`} alt="" style={{ width: 56, height: 56, objectFit: "contain", background: "#fff", borderRadius: 6, border: `1px solid ${C.border}`, padding: 4, display: "block" }} onError={e => e.target.style.display="none"} />
+                  : <div style={{ width: 56, height: 56, background: C.border, borderRadius: 6 }} />
                 }
               </td>
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{c.name}</td>
