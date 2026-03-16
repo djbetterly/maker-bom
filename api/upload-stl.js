@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     // Stream the body directly to Vercel Blob
     const blob = await put(`stl-files/${filename}`, req, {
-      access: "public",
+      
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });
     return res.status(200).json({ url: blob.url, filename });
