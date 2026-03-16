@@ -190,54 +190,122 @@ function extractFromUrl(url) {
 
 // ─── INVOICE IMPORT MODAL ────────────────────────────────────────────────────
 function InvoiceImportModal({ catalog, onImport, onClose }) {
-  const [stage, setStage]     = useState("upload"); // upload | processing | review
-  const [items, setItems]     = useState([]);
+  const [stage, setStage]       = useState("upload"); // upload | processing | review
+  const [items, setItems]       = useState([]);
   const [selected, setSelected] = useState({});
-  const [error, setError]     = useState(null);
-  const [filename, setFilename] = useState("");
+  const [error, setError]       = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, name: "" });
 
-  async function handleFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setFilename(file.name);
-    setStage("processing");
-    setError(null);
-
-    // Read as base64
-    const base64 = await new Promise((resolve, reject) => {
+  function readAsBase64(file) {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onload  = () => resolve(reader.result.split(",")[1]);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  async function processOnePdf(file) {
+    const base64 = await readAsBase64(file);
+    const res  = await fetch("/api/invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfBase64: base64 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(`${file.name}: ${data.error || "Import failed"}`);
+    return (data.parts || []).map(p => ({ ...p, sourceFile: file.name }));
+  }
+
+  async function extractZipPdfs(zipFile) {
+    // Dynamically load JSZip from CDN
+    if (!window.JSZip) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const zip = await window.JSZip.loadAsync(zipFile);
+    const pdfFiles = [];
+    zip.forEach((path, entry) => {
+      if (!entry.dir && path.toLowerCase().endsWith(".pdf")) pdfFiles.push(entry);
+    });
+    return pdfFiles;
+  }
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setStage("processing");
+    setError(null);
 
     try {
-      const res = await fetch("/api/invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfBase64: base64 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Import failed");
+      // Collect all PDFs — direct files or from zip
+      let pdfsToProcess = []; // { name, getBase64 }
 
-      // Match against existing catalog by part number
-      const enriched = data.parts.map(p => {
-        const existing = catalog.find(c => c.partNumber && c.partNumber === p.partNumber);
-        let status = "new";
-        if (existing) {
-          const oldCost = parseFloat(existing.unitCost);
-          const newCost = parseFloat(p.unitCost);
-          status = Math.abs(oldCost - newCost) > 0.0001 ? "price_changed" : "exists";
+      for (const file of files) {
+        if (file.name.toLowerCase().endsWith(".zip")) {
+          const zipEntries = await extractZipPdfs(file);
+          zipEntries.forEach(entry => {
+            pdfsToProcess.push({
+              name: entry.name.split("/").pop(),
+              getBase64: () => entry.async("base64"),
+            });
+          });
+        } else if (file.name.toLowerCase().endsWith(".pdf")) {
+          pdfsToProcess.push({
+            name: file.name,
+            getBase64: () => readAsBase64(file),
+          });
         }
-        return { ...p, status, existingId: existing?.id ?? null };
+      }
+
+      if (!pdfsToProcess.length) throw new Error("No PDF files found in selection");
+
+      setProgress({ current: 0, total: pdfsToProcess.length, name: "" });
+
+      // Process each PDF sequentially
+      const allRawParts = [];
+      for (let i = 0; i < pdfsToProcess.length; i++) {
+        const pdf = pdfsToProcess[i];
+        setProgress({ current: i + 1, total: pdfsToProcess.length, name: pdf.name });
+
+        const base64 = await pdf.getBase64();
+        const res = await fetch("/api/invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pdfBase64: base64 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(`${pdf.name}: ${data.error || "Import failed"}`);
+        (data.parts || []).forEach(p => allRawParts.push({ ...p, sourceFile: pdf.name }));
+      }
+
+      // Deduplicate across invoices — keep highest price (most recent) per part number
+      const seen = new Map();
+      allRawParts.forEach(p => {
+        if (!p.partNumber) { seen.set(Math.random(), p); return; }
+        const existing = seen.get(p.partNumber);
+        if (!existing || n2(p.pkgPrice) > n2(existing.pkgPrice)) seen.set(p.partNumber, p);
+      });
+      const deduped = Array.from(seen.values());
+
+      // Match against catalog
+      const enriched = deduped.map(p => {
+        const inCatalog = catalog.find(c => c.partNumber && c.partNumber === p.partNumber);
+        let status = "new";
+        if (inCatalog) {
+          status = Math.abs(parseFloat(inCatalog.unitCost) - parseFloat(p.unitCost)) > 0.0001
+            ? "price_changed" : "exists";
+        }
+        return { ...p, status, existingId: inCatalog?.id ?? null };
       });
 
       setItems(enriched);
-      // Pre-select new and price_changed items
       const sel = {};
-      enriched.forEach((item, i) => {
-        if (item.status !== "exists") sel[i] = true;
-      });
+      enriched.forEach((item, i) => { if (item.status !== "exists") sel[i] = true; });
       setSelected(sel);
       setStage("review");
     } catch (err) {
@@ -253,43 +321,48 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
   }
 
   function confirm() {
-    const toImport = items.filter((_, i) => selected[i]);
-    onImport(toImport);
+    onImport(items.filter((_, i) => selected[i]));
   }
 
   const statusLabel = {
-    new:           { label: "New",           color: C.green  },
-    price_changed: { label: "Price changed", color: C.yellow },
-    exists:        { label: "Already exists",color: C.faint  },
+    new:           { label: "New",            color: C.green  },
+    price_changed: { label: "Price changed",  color: C.yellow },
+    exists:        { label: "Already exists", color: C.faint  },
   };
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
   return (
-    <Modal title="📄  Import McMaster Invoice" onClose={onClose} width={780}>
+    <Modal title="📄  Import McMaster Invoices" onClose={onClose} width={820}>
+      <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
+
       {stage === "upload" && (
         <div style={{ textAlign: "center", padding: "40px 0" }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>📄</div>
-          <div style={{ color: C.text, fontSize: 14, marginBottom: 8 }}>Upload a McMaster-Carr invoice PDF</div>
-          <div style={{ color: "#6b8fa8", fontSize: 11, marginBottom: 24 }}>Claude will extract all line items and match them against your catalog</div>
+          <div style={{ color: C.text, fontSize: 14, marginBottom: 6 }}>Upload McMaster-Carr invoice PDFs</div>
+          <div style={{ color: "#6b8fa8", fontSize: 11, marginBottom: 6 }}>Select multiple PDFs, or a ZIP of invoices — Claude processes them all at once</div>
+          <div style={{ color: C.faint, fontSize: 10, marginBottom: 24 }}>Duplicates across invoices are automatically merged, keeping the most recent price</div>
           {error && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 6, padding: "10px 16px" }}>⚠ {error}</div>}
           <label style={{ ...btnPrimary, display: "inline-block", cursor: "pointer", padding: "10px 24px" }}>
-            Choose PDF
-            <input type="file" accept=".pdf" onChange={handleFile} style={{ display: "none" }} />
+            Choose PDFs or ZIP
+            <input type="file" accept=".pdf,.zip" multiple onChange={handleFiles} style={{ display: "none" }} />
           </label>
         </div>
       )}
 
       {stage === "processing" && (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
-          <div style={{ color: C.accent, fontSize: 13, marginBottom: 8 }}>Reading {filename}…</div>
-          <div style={{ color: "#6b8fa8", fontSize: 11 }}>Claude is extracting line items from your invoice</div>
-          <div style={{ marginTop: 24, display: "flex", justifyContent: "center", gap: 6 }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent, opacity: 0.4, animation: `pulse 1.2s ${i*0.2}s infinite` }} />
-            ))}
+          <div style={{ color: C.accent, fontSize: 13, marginBottom: 6 }}>
+            Processing {progress.current} of {progress.total} — {progress.name}
           </div>
-          <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
+          <div style={{ color: "#6b8fa8", fontSize: 11, marginBottom: 20 }}>Claude is extracting line items…</div>
+          {/* Progress bar */}
+          <div style={{ width: 280, height: 4, background: C.border, borderRadius: 2, margin: "0 auto 20px", overflow: "hidden" }}>
+            <div style={{ height: "100%", background: C.accent, borderRadius: 2, width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%`, transition: "width 0.3s" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+            {[0,1,2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent, opacity: 0.4, animation: `pulse 1.2s ${i*0.2}s infinite` }} />)}
+          </div>
         </div>
       )}
 
@@ -297,50 +370,54 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <div style={{ color: "#6b8fa8", fontSize: 11 }}>
-              Found <strong style={{ color: C.text }}>{items.length}</strong> line items in <strong style={{ color: C.text }}>{filename}</strong>
+              Found <strong style={{ color: C.text }}>{items.length}</strong> unique parts across all invoices
+              <span style={{ color: C.green, marginLeft: 10 }}>● {items.filter(i => i.status === "new").length} new</span>
+              <span style={{ color: C.yellow, marginLeft: 8 }}>● {items.filter(i => i.status === "price_changed").length} price changes</span>
+              <span style={{ color: C.faint, marginLeft: 8 }}>● {items.filter(i => i.status === "exists").length} unchanged</span>
             </div>
             <div style={{ flex: 1 }} />
             <button onClick={() => toggleAll(true)}  style={{ ...btnGhost, padding: "4px 10px", fontSize: 10 }}>Select all</button>
             <button onClick={() => toggleAll(false)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 10 }}>Clear</button>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-            <thead>
-              <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                <th style={{ padding: "6px 8px", borderBottom: `1px solid ${C.border}`, width: 28 }}></th>
-                {["Status","Name","Part #","Pkg","Unit Cost","Notes"].map((h,i) => (
-                  <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => {
-                const st = statusLabel[item.status];
-                const isChecked = !!selected[i];
-                return (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, opacity: item.status === "exists" && !isChecked ? 0.45 : 1 }}>
-                    <td style={{ padding: "9px 8px" }}>
-                      <input type="checkbox" checked={isChecked} onChange={() => setSelected(s => ({ ...s, [i]: !s[i] }))} />
-                    </td>
-                    <td style={{ padding: "9px 8px" }}>
-                      <span style={{ background: st.color + "22", color: st.color, border: `1px solid ${st.color}44`, borderRadius: 3, padding: "2px 6px", fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {st.label}
-                      </span>
-                    </td>
-                    <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{item.name}</td>
-                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>{item.partNumber || "—"}</td>
-                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>
-                      {item.pkgQty > 1 ? `${item.pkgQty} @ $${n2(item.pkgPrice).toFixed(2)}` : "—"}
-                    </td>
-                    <td style={{ padding: "9px 8px", color: C.accent, fontSize: 12, fontFamily: "monospace" }}>${n2(item.unitCost).toFixed(4)}/ea</td>
-                    <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11 }}>{item.notes || "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div style={{ maxHeight: 400, overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ position: "sticky", top: 0, background: "#0a1520", zIndex: 1 }}>
+                <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  <th style={{ padding: "6px 8px", borderBottom: `1px solid ${C.border}`, width: 28 }}></th>
+                  {["Status","Name","Part #","Pkg","Unit Cost","Source","Notes"].map((h,i) => (
+                    <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => {
+                  const st = statusLabel[item.status];
+                  const isChecked = !!selected[i];
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, opacity: item.status === "exists" && !isChecked ? 0.4 : 1 }}>
+                      <td style={{ padding: "9px 8px" }}>
+                        <input type="checkbox" checked={isChecked} onChange={() => setSelected(s => ({ ...s, [i]: !s[i] }))} />
+                      </td>
+                      <td style={{ padding: "9px 8px" }}>
+                        <span style={{ background: st.color + "22", color: st.color, border: `1px solid ${st.color}44`, borderRadius: 3, padding: "2px 6px", fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" }}>{st.label}</span>
+                      </td>
+                      <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{item.name}</td>
+                      <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>{item.partNumber || "—"}</td>
+                      <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>
+                        {item.pkgQty > 1 ? `${item.pkgQty} @ $${n2(item.pkgPrice).toFixed(2)}` : "—"}
+                      </td>
+                      <td style={{ padding: "9px 8px", color: C.accent, fontSize: 12, fontFamily: "monospace" }}>${n2(item.unitCost).toFixed(4)}/ea</td>
+                      <td style={{ padding: "9px 8px", color: C.faint, fontSize: 10, maxWidth: 120 }}>{item.sourceFile}</td>
+                      <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11 }}>{item.notes || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 8 }}>
             <div style={{ color: "#6b8fa8", fontSize: 11 }}>
               {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected —&nbsp;
               <span style={{ color: C.green }}>{items.filter((_,i) => selected[i] && items[i].status === "new").length} new</span>,&nbsp;
@@ -1151,7 +1228,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.3</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.4</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
