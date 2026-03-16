@@ -1022,26 +1022,31 @@ export default function App() {
   const [deleteConfirm,   setDeleteConfirm]   = useState(null);
 
   // Load: Redis first, fall back to localStorage
-  useEffect(() => {
-    (async () => {
-      const remote = await apiGet();
-      const p  = remote?.projects  ?? lsGet("maker_bom_projects");
-      const s  = remote?.settings  ?? lsGet("maker_bom_settings");
-      const fl = remote?.filaments ?? lsGet("maker_bom_filaments");
-      const ct = remote?.catalog   ?? lsGet("maker_bom_catalog");
-      const projs = p ?? SEED;
-      setProjects(projs);
-      if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
-      setFilaments(fl ?? SEED_FILAMENTS);
-      setCatalog(ct ?? SEED_CATALOG);
-      if (projs.length) setSelected(projs[0].id);
-      if (remote?.projects)  lsSet("maker_bom_projects",  remote.projects);
-      if (remote?.settings)  lsSet("maker_bom_settings",  remote.settings);
-      if (remote?.filaments) lsSet("maker_bom_filaments", remote.filaments);
-      if (remote?.catalog)   lsSet("maker_bom_catalog",   remote.catalog);
-      setLoaded(true);
-    })();
-  }, []);
+  async function loadData(forceRemote = false) {
+    setSyncStatus("syncing");
+    const remote = await apiGet();
+    // Always prefer Redis — never fall back to localStorage if Redis responds
+    const p  = remote?.projects  ?? (forceRemote ? null : lsGet("maker_bom_projects"));
+    const s  = remote?.settings  ?? (forceRemote ? null : lsGet("maker_bom_settings"));
+    const fl = remote?.filaments ?? (forceRemote ? null : lsGet("maker_bom_filaments"));
+    const ct = remote?.catalog   ?? (forceRemote ? null : lsGet("maker_bom_catalog"));
+    const projs = p ?? SEED;
+    setProjects(projs);
+    if (s)  setSettings({ ...DEFAULT_SETTINGS, ...s });
+    setFilaments(fl ?? SEED_FILAMENTS);
+    setCatalog(ct ?? SEED_CATALOG);
+    if (!selected && projs.length) setSelected(projs[0].id);
+    // Warm localStorage from Redis
+    if (remote?.projects)  lsSet("maker_bom_projects",  remote.projects);
+    if (remote?.settings)  lsSet("maker_bom_settings",  remote.settings);
+    if (remote?.filaments) lsSet("maker_bom_filaments", remote.filaments);
+    if (remote?.catalog)   lsSet("maker_bom_catalog",   remote.catalog);
+    setSyncStatus("ok");
+    setTimeout(() => setSyncStatus("idle"), 2000);
+    setLoaded(true);
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   const syncToRedis = useCallback(async (key, value) => {
     setSyncStatus("syncing");
@@ -1121,10 +1126,13 @@ export default function App() {
           <div style={{ padding: "18px 16px 12px", borderBottom: `1px solid ${C.border}` }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16, color: C.accent }}>MAKER BOM</div>
-              <span title={syncStatus === "syncing" ? "Syncing…" : syncStatus === "ok" ? "Synced" : syncStatus === "error" ? "Sync error" : ""}
-                style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => loadData(true)} title="Refresh from cloud" style={{ background: "none", border: "none", color: "#6b8fa8", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0 }}>↺</button>
+                <span title={syncStatus === "syncing" ? "Syncing…" : syncStatus === "ok" ? "Synced" : syncStatus === "error" ? "Sync error" : ""}
+                  style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
+              </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.1</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.2</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
