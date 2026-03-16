@@ -49,7 +49,7 @@ const SEED_CATALOG = [
 const EMPTY_PART = {
   id: null, name: "", type: "purchased", qty: 1, unit: "ea",
   vendor: "mcmaster", partNumber: "", url: "", files: "",
-  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "",
+  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "", stlUrl: "", stlName: "",
 };
 
 const EMPTY_CALC = {
@@ -152,9 +152,9 @@ function HR({ label }) {
     </div>
   );
 }
-function Modal({ title, onClose, width = 540, children }) {
+function Modal({ title, onClose, width = 540, zIndex = 1000, children }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000099", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(3px)" }} onClick={e => e.target === e.currentTarget && onClose()}>
+    <div style={{ position: "fixed", inset: 0, background: "#00000099", display: "flex", alignItems: "center", justifyContent: "center", zIndex, backdropFilter: "blur(3px)" }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: "#0a1520", border: `1px solid ${C.border2}`, borderRadius: 8, width: `min(98vw, ${width}px)`, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 64px #000e" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px 12px", borderBottom: `1px solid ${C.border}` }}>
           <span style={{ color: C.accent, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</span>
@@ -873,7 +873,7 @@ function PrintCalc({ settings, filaments, onApply, onClose }) {
     ...(c.hasSupports ? [{ l: "Support Removal", v: support, d: `${c.supportRemovalMins}min @ $${lr}/hr` }] : []),
   ];
   return (
-    <Modal title="🖨️  3D Print Cost Calculator" onClose={onClose} width={620}>
+    <Modal title="🖨️  3D Print Cost Calculator" onClose={onClose} width={620} zIndex={1100}>
       <HR label="Filament" />
       {filaments.length === 0 ? (
         <div style={{ color: C.yellow, fontSize: 12, marginBottom: 14 }}>⚠ No filaments — add some in the Filament Library</div>
@@ -955,6 +955,35 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
   const [catSearch, setCatSearch] = useState("");
   const [showCalc, setShowCalc]   = useState(false);
   const [urlHint, setUrlHint]     = useState(null);
+  const [stlUploading, setStlUploading] = useState(false);
+  const [stlError, setStlError]         = useState("");
+
+  async function handleStlUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setStlUploading(true);
+    setStlError("");
+    try {
+      const res = await fetch("/api/upload-stl", {
+        method: "POST",
+        headers: { "x-filename": file.name },
+        body: file,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      // Store URL and add filename to files list
+      setForm(p => ({
+        ...p,
+        stlUrl:  data.url,
+        stlName: file.name,
+        files:   p.files ? `${p.files}, ${file.name}` : file.name,
+      }));
+    } catch (err) {
+      setStlError(err.message);
+    } finally {
+      setStlUploading(false);
+    }
+  }
 
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
   const tog = k => () => setForm(p => ({ ...p, [k]: !p[k] }));
@@ -1087,6 +1116,27 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
             <div style={{ gridColumn: "1/-1" }}>
               <F label="File References" hint="STL, DXF, or drawing filenames — comma-separated">
                 <input style={inp} value={form.files} onChange={set("files")} placeholder="body.stl, lid_panel.dxf" />
+              </F>
+            </div>
+          )}
+          {is3D && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="STL File" hint="Upload your STL — stored in the cloud, linked to this part">
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, opacity: stlUploading ? 0.5 : 1 }}>
+                    {stlUploading ? "Uploading…" : form.stlUrl ? "↺ Replace STL" : "⬆ Upload STL"}
+                    <input type="file" accept=".stl,.obj,.3mf" onChange={handleStlUpload} style={{ display: "none" }} disabled={stlUploading} />
+                  </label>
+                  {form.stlUrl && (
+                    <a href={form.stlUrl} download={form.stlName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      ⬇ {form.stlName || "Download STL"}
+                    </a>
+                  )}
+                  {form.stlUrl && (
+                    <button type="button" onClick={() => setForm(p => ({ ...p, stlUrl: "", stlName: "" }))} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                  )}
+                </div>
+                {stlError && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{stlError}</div>}
               </F>
             </div>
           )}
@@ -1404,7 +1454,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.7</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.8</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1500,7 +1550,8 @@ export default function App() {
                               {part.partNumber && <div style={{ color: "#6b8fa8", fontWeight: 700 }}>{part.partNumber}</div>}
                               {part.files && <div style={{ color: C.green, marginTop: 2, fontSize: 10 }}>{part.files.split(",").map((f, i) => <span key={i} style={{ marginRight: 6 }}>📄 {f.trim()}</span>)}</div>}
                               {part.designUrl && <div style={{ marginTop: 3 }}><a href={part.designUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>↗ Fusion 360</a></div>}
-                              {!part.partNumber && !part.files && !part.designUrl && <span style={{ color: C.faint }}>—</span>}
+                              {part.stlUrl && <div style={{ marginTop: 3 }}><a href={part.stlUrl} download={part.stlName} style={{ color: C.green, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ STL</a></div>}
+                              {!part.partNumber && !part.files && !part.designUrl && !part.stlUrl && <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
                             <td style={{ padding: "9px 10px", color: tot > 0 ? C.accent : C.faint, fontSize: 12, fontWeight: 700 }}>{tot > 0 ? `$${tot.toFixed(2)}` : "—"}</td>
