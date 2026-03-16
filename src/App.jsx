@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const VENDORS = [
@@ -361,7 +361,7 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
 // ─── PARTS CATALOG MODAL ──────────────────────────────────────────────────────
 function CatalogModal({ catalog, onSave, onClose }) {
   const [list, setList]       = useState(catalog);
-  const isFirstRender = React.useRef(true);
+  const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     onSave(list);
@@ -1124,7 +1124,7 @@ export default function App() {
               <span title={syncStatus === "syncing" ? "Syncing…" : syncStatus === "ok" ? "Synced" : syncStatus === "error" ? "Sync error" : ""}
                 style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.0</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.1</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
