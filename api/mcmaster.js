@@ -1,12 +1,40 @@
 // api/mcmaster.js — McMaster part lookup with mTLS certificate auth
-const https = require("https");
+// Uses node-forge to parse PFX to avoid OpenSSL 3 legacy encryption issues
+const https  = require("https");
+const forge  = require("node-forge");
 
 const BASE = "api.mcmaster.com";
 
-function request(options, body, pfx, passphrase) {
+function extractCertAndKey(pfxBuffer, passphrase) {
+  const p12Der = forge.util.createBuffer(pfxBuffer.toString("binary"));
+  const p12    = forge.pkcs12.pkcs12FromAsn1(
+    forge.asn1.fromDer(p12Der),
+    false,
+    passphrase
+  );
+
+  let certPem = null;
+  let keyPem  = null;
+
+  for (const safeContent of p12.safeContents) {
+    for (const safeBag of safeContent.safeBags) {
+      if (safeBag.type === forge.pki.oids.certBag) {
+        certPem = forge.pki.certificateToPem(safeBag.cert);
+      } else if (safeBag.type === forge.pki.oids.pkcs8ShroudedKeyBag ||
+                 safeBag.type === forge.pki.oids.keyBag) {
+        keyPem = forge.pki.privateKeyToPem(safeBag.key);
+      }
+    }
+  }
+
+  if (!certPem || !keyPem) throw new Error("Could not extract cert/key from PFX");
+  return { certPem, keyPem };
+}
+
+function request(options, body, certPem, keyPem) {
   return new Promise((resolve, reject) => {
     const req = https.request(
-      { ...options, host: BASE, pfx, passphrase, rejectUnauthorized: true },
+      { ...options, host: BASE, cert: certPem, key: keyPem, rejectUnauthorized: true },
       res => {
         let data = "";
         res.on("data", chunk => data += chunk);
@@ -26,10 +54,14 @@ function request(options, body, pfx, passphrase) {
 }
 
 function authHeaders(token) {
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`,
-  };
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+}
+
+async function logout(certPem, keyPem, token) {
+  return request(
+    { path: "/v1/logout", method: "POST", headers: authHeaders(token) },
+    null, certPem, keyPem
+  ).catch(() => {});
 }
 
 export default async function handler(req, res) {
@@ -42,27 +74,24 @@ export default async function handler(req, res) {
   const { partNumber } = req.body;
   if (!partNumber) return res.status(400).json({ error: "Missing partNumber" });
 
-  // Strip any whitespace/newlines from the base64 cert env var
   const certBase64 = (process.env.MCMASTER_CERT || "").replace(/\s+/g, "");
-  if (!certBase64) return res.status(500).json({ error: "MCMASTER_CERT env var not set" });
+  if (!certBase64) return res.status(500).json({ error: "MCMASTER_CERT not set" });
 
-  let pfx;
+  let certPem, keyPem;
   try {
-    pfx = Buffer.from(certBase64, "base64");
+    const pfxBuffer = Buffer.from(certBase64, "base64");
+    ({ certPem, keyPem } = extractCertAndKey(pfxBuffer, process.env.MCMASTER_CERT_PASSWORD));
   } catch (e) {
-    return res.status(500).json({ error: "Failed to decode cert: " + e.message });
+    return res.status(500).json({ error: "Failed to parse cert: " + e.message });
   }
 
-  const passphrase = process.env.MCMASTER_CERT_PASSWORD;
-
   let token = null;
-
   try {
     // 1. Login
     const loginRes = await request(
       { path: "/v1/login", method: "POST", headers: { "Content-Type": "application/json" } },
       { UserName: process.env.MCMASTER_USERNAME, Password: process.env.MCMASTER_PASSWORD },
-      pfx, passphrase
+      certPem, keyPem
     );
     if (loginRes.status !== 200) {
       return res.status(401).json({ error: "McMaster login failed", detail: loginRes.body });
@@ -73,23 +102,23 @@ export default async function handler(req, res) {
     const subRes = await request(
       { path: "/v1/products", method: "PUT", headers: authHeaders(token) },
       { URL: `https://mcmaster.com/${partNumber}` },
-      pfx, passphrase
+      certPem, keyPem
     );
     if (subRes.status !== 200 && subRes.status !== 201) {
-      await logout(pfx, passphrase, token);
+      await logout(certPem, keyPem, token);
       return res.status(400).json({ error: "Part not found or invalid", detail: subRes.body });
     }
     const productData = subRes.body;
 
-    // 3. Get current price
+    // 3. Get price
     const priceRes = await request(
       { path: `/v1/products/${partNumber}/price`, method: "GET", headers: authHeaders(token) },
-      null, pfx, passphrase
+      null, certPem, keyPem
     );
     const prices = priceRes.status === 200 ? priceRes.body : [];
 
     // 4. Logout
-    await logout(pfx, passphrase, token);
+    await logout(certPem, keyPem, token);
 
     // 5. Shape response
     const name = [productData.FamilyDescription, productData.DetailDescription]
@@ -100,23 +129,16 @@ export default async function handler(req, res) {
       .map(p => ({ qty: p.MinimumQuantity, price: p.Amount, unit: p.UnitOfMeasure }));
 
     return res.status(200).json({
-      partNumber:  productData.PartNumber,
+      partNumber: productData.PartNumber,
       name,
-      status:      productData.ProductStatus,
+      status:     productData.ProductStatus,
       priceTiers,
-      unitPrice:   priceTiers[0]?.price ?? null,
-      url:         `https://www.mcmaster.com/${partNumber}/`,
+      unitPrice:  priceTiers[0]?.price ?? null,
+      url:        `https://www.mcmaster.com/${partNumber}/`,
     });
 
   } catch (err) {
-    if (token) await logout(pfx, passphrase, token).catch(() => {});
+    if (token) await logout(certPem, keyPem, token).catch(() => {});
     return res.status(500).json({ error: err.message });
   }
-}
-
-async function logout(pfx, passphrase, token) {
-  return request(
-    { path: "/v1/logout", method: "POST", headers: authHeaders(token) },
-    null, pfx, passphrase
-  ).catch(() => {});
 }
