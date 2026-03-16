@@ -1,14 +1,19 @@
-// api/data.js — Vercel serverless function for Redis sync
-const KV_URL   = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+// api/data.js — Vercel serverless function for Redis sync using REDIS_URL
+import Redis from "ioredis";
 
-async function kv(method, ...args) {
-  const res = await fetch(`${KV_URL}/${[method, ...args].map(encodeURIComponent).join("/")}`, {
-    headers: { Authorization: `Bearer ${KV_TOKEN}` },
-  });
-  const json = await res.json();
-  return json.result;
+let client;
+function getClient() {
+  if (!client) {
+    client = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      lazyConnect: true,
+      tls: process.env.REDIS_URL?.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+  return client;
 }
+
+const KEYS = ["maker_bom_projects", "maker_bom_settings", "maker_bom_filaments", "maker_bom_catalog"];
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,14 +21,13 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  const redis = getClient();
+
   if (req.method === "GET") {
     try {
-      const [projects, settings, filaments, catalog] = await Promise.all([
-        kv("GET", "maker_bom_projects"),
-        kv("GET", "maker_bom_settings"),
-        kv("GET", "maker_bom_filaments"),
-        kv("GET", "maker_bom_catalog"),
-      ]);
+      const [projects, settings, filaments, catalog] = await Promise.all(
+        KEYS.map(k => redis.get(k))
+      );
       return res.status(200).json({
         projects:  projects  ? JSON.parse(projects)  : null,
         settings:  settings  ? JSON.parse(settings)  : null,
@@ -37,7 +41,7 @@ export default async function handler(req, res) {
     try {
       const { key, value } = req.body;
       if (!key || value === undefined) return res.status(400).json({ error: "Missing key or value" });
-      await kv("SET", key, JSON.stringify(value));
+      await redis.set(key, JSON.stringify(value));
       return res.status(200).json({ ok: true });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
