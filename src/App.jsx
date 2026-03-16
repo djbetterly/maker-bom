@@ -487,12 +487,15 @@ function CatalogModal({ catalog, onSave, onClose }) {
       const lowestPrice = data.priceTiers?.[0];
       setForm(p => ({
         ...p,
-        name:       data.name || p.name,
-        url:        data.url  || p.url,
-        vendor:     "mcmaster",
-        pkgQty:     lowestPrice ? String(lowestPrice.qty)   : p.pkgQty,
-        pkgPrice:   lowestPrice ? String(lowestPrice.price) : p.pkgPrice,
-        unitPrice:  lowestPrice ? String(lowestPrice.price) : p.unitCost,
+        name:           data.name || p.name,
+        url:            data.url  || p.url,
+        vendor:         "mcmaster",
+        pkgQty:         lowestPrice ? String(lowestPrice.qty)   : p.pkgQty,
+        pkgPrice:       lowestPrice ? String(lowestPrice.price) : p.pkgPrice,
+        unitPrice:      lowestPrice ? String(lowestPrice.price) : p.unitCost,
+        imagePath:      data.imagePath      || p.imagePath      || "",
+        cadLinks:       data.cadLinks       || p.cadLinks       || [],
+        datasheetLinks: data.datasheetLinks || p.datasheetLinks || [],
       }));
       setLookupStatus("ok");
     } catch (err) {
@@ -543,7 +546,7 @@ function CatalogModal({ catalog, onSave, onClose }) {
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
         <thead>
           <tr style={{ color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            {["Name","Vendor","Part #","Pkg","Unit Cost","","Notes",""].map((h,i) => (
+            {["","Name","Vendor","Part #","Pkg","Unit Cost","","Notes",""].map((h,i) => (
               <th key={i} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
             ))}
           </tr>
@@ -551,6 +554,12 @@ function CatalogModal({ catalog, onSave, onClose }) {
         <tbody>
           {filtered.map(c => (
             <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+              <td style={{ padding: "9px 8px", width: 44 }}>
+                {c.imagePath
+                  ? <img src={`/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}`} alt="" style={{ width: 36, height: 36, objectFit: "contain", background: "#fff", borderRadius: 4, border: `1px solid ${C.border}`, padding: 2, display: "block" }} onError={e => e.target.style.display="none"} />
+                  : <div style={{ width: 36, height: 36, background: C.border, borderRadius: 4 }} />
+                }
+              </td>
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{c.name}</td>
               <td style={{ padding: "9px 8px" }}><Badge vendorId={c.vendor} /></td>
               <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, fontFamily: "monospace" }}>{c.partNumber || <span style={{ color: C.faint }}>—</span>}</td>
@@ -638,6 +647,38 @@ function CatalogModal({ catalog, onSave, onClose }) {
                 Stock item — kept on hand, not procured per-build
               </label>
             </div>
+            {/* Product image preview */}
+            {form.imagePath && (
+              <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
+                <div style={{ color: "#6b8fa8", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>Product Image</div>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                  <img
+                    src={`/api/mcmaster-asset?path=${encodeURIComponent(form.imagePath)}`}
+                    alt={form.name}
+                    style={{ width: 120, height: 120, objectFit: "contain", background: "#fff", borderRadius: 6, border: `1px solid ${C.border2}`, padding: 8 }}
+                    onError={e => e.target.style.display = "none"}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
+                    {(form.cadLinks || []).map((l, i) => (
+                      <a key={i}
+                        href={`/api/mcmaster-asset?path=${encodeURIComponent(l.path)}`}
+                        download
+                        style={{ color: C.accent, fontSize: 11, textDecoration: "none", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 6 }}>
+                        ⬇ {l.label}
+                      </a>
+                    ))}
+                    {(form.datasheetLinks || []).map((l, i) => (
+                      <a key={i}
+                        href={`/api/mcmaster-asset?path=${encodeURIComponent(l.path)}`}
+                        download
+                        style={{ color: C.purple, fontSize: 11, textDecoration: "none", fontFamily: "monospace", display: "flex", alignItems: "center", gap: 6 }}>
+                        ⬇ {l.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button onClick={() => setEditing(null)} style={btnGhost}>Cancel</button>
@@ -1274,7 +1315,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.5</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.6</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
