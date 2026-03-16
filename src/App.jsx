@@ -637,14 +637,12 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
           {filtered.map(c => (
             <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
               <td style={{ padding: "9px 8px", width: 72 }}>
-                {c.imagePath
-                  (() => {
+                {(() => {
                     const src = localImages[c.partNumber] || (c.imagePath ? `/api/mcmaster-asset?path=${encodeURIComponent(c.imagePath)}` : null);
                     return src
                       ? <img src={src} alt="" style={{ width: 56, height: 56, objectFit: "contain", background: "#fff", borderRadius: 6, border: `1px solid ${C.border}`, padding: 4, display: "block" }} onError={e => e.target.style.display="none"} />
                       : <div style={{ width: 56, height: 56, background: C.border, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 18 }}>🔩</span></div>;
-                  })()
-                }
+                  })()}
               </td>
               <td style={{ padding: "9px 8px", color: C.text, fontSize: 12, fontWeight: 500 }}>{c.name}</td>
               <td style={{ padding: "9px 8px" }}><Badge vendorId={c.vendor} /></td>
