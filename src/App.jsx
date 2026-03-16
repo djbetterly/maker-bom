@@ -1128,7 +1128,7 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
                     <input type="file" accept=".stl,.obj,.3mf" onChange={handleStlUpload} style={{ display: "none" }} disabled={stlUploading} />
                   </label>
                   {form.stlUrl && (
-                    <a href={form.stlUrl} download={form.stlName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <a href={`/api/download-stl?url=${encodeURIComponent(form.stlUrl)}`} download={form.stlName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       ⬇ {form.stlName || "Download STL"}
                     </a>
                   )}
@@ -1550,7 +1550,7 @@ export default function App() {
                               {part.partNumber && <div style={{ color: "#6b8fa8", fontWeight: 700 }}>{part.partNumber}</div>}
                               {part.files && <div style={{ color: C.green, marginTop: 2, fontSize: 10 }}>{part.files.split(",").map((f, i) => <span key={i} style={{ marginRight: 6 }}>📄 {f.trim()}</span>)}</div>}
                               {part.designUrl && <div style={{ marginTop: 3 }}><a href={part.designUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>↗ Fusion 360</a></div>}
-                              {part.stlUrl && <div style={{ marginTop: 3 }}><a href={part.stlUrl} download={part.stlName} style={{ color: C.green, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ STL</a></div>}
+                              {part.stlUrl && <div style={{ marginTop: 3 }}><a href={`/api/download-stl?url=${encodeURIComponent(part.stlUrl)}`} download={part.stlName} style={{ color: C.green, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ STL</a></div>}
                               {!part.partNumber && !part.files && !part.designUrl && !part.stlUrl && <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
