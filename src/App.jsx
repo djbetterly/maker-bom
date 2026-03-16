@@ -49,7 +49,7 @@ const SEED_CATALOG = [
 const EMPTY_PART = {
   id: null, name: "", type: "purchased", qty: 1, unit: "ea",
   vendor: "mcmaster", partNumber: "", url: "", files: "",
-  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "", stlUrl: "", stlName: "",
+  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "", stlUrl: "", stlName: "", dxfUrl: "", dxfName: "", priceTiers: [],
 };
 
 const EMPTY_CALC = {
@@ -956,13 +956,25 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
   const [showCalc, setShowCalc]   = useState(false);
   const [urlHint, setUrlHint]     = useState(null);
   const [stlUploading, setStlUploading] = useState(false);
-  const [stlError, setStlError]         = useState("");
 
-  async function handleStlUpload(e) {
-    const file = e.target.files[0];
+  // Price tier helpers for custom cut parts
+  function addTier()       { setForm(p => ({ ...p, priceTiers: [...(p.priceTiers||[]), { qty: "", price: "" }] })); }
+  function removeTier(i)   { setForm(p => ({ ...p, priceTiers: p.priceTiers.filter((_,j) => j !== i) })); }
+  function setTier(i, k, v){ setForm(p => ({ ...p, priceTiers: p.priceTiers.map((t,j) => j === i ? { ...t, [k]: v } : t) })); }
+  // When qty matches a tier, update unitCost live
+  function applyTierForQty(qty) {
+    const tiers = (form.priceTiers || []).filter(t => t.qty && t.price).sort((a,b) => n2(b.qty) - n2(a.qty));
+    const match = tiers.find(t => n2(qty) >= n2(t.qty));
+    if (match) setForm(p => ({ ...p, unitCost: match.price }));
+  }
+  const [stlError, setStlError]         = useState("");
+  const [dxfUploading, setDxfUploading] = useState(false);
+  const [dxfError, setDxfError]         = useState("");
+
+  async function handleFileUpload(file, setUploading, setError, urlKey, nameKey) {
     if (!file) return;
-    setStlUploading(true);
-    setStlError("");
+    setUploading(true);
+    setError("");
     try {
       const res = await fetch("/api/upload-stl", {
         method: "POST",
@@ -971,19 +983,21 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      // Store URL and add filename to files list
       setForm(p => ({
         ...p,
-        stlUrl:  data.url,
-        stlName: file.name,
-        files:   p.files ? `${p.files}, ${file.name}` : file.name,
+        [urlKey]:  data.url,
+        [nameKey]: file.name,
+        files: p.files ? `${p.files}, ${file.name}` : file.name,
       }));
     } catch (err) {
-      setStlError(err.message);
+      setError(err.message);
     } finally {
-      setStlUploading(false);
+      setUploading(false);
     }
   }
+
+  const handleStlUpload = e => handleFileUpload(e.target.files[0], setStlUploading, setStlError, "stlUrl", "stlName");
+  const handleDxfUpload = e => handleFileUpload(e.target.files[0], setDxfUploading, setDxfError, "dxfUrl", "dxfName");
 
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
   const tog = k => () => setForm(p => ({ ...p, [k]: !p[k] }));
@@ -1094,16 +1108,38 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
             <F label="Vendor"><select style={sel} value={form.vendor} onChange={set("vendor")}>{VENDORS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></F>
           )}
 
-          <F label="Qty"><input style={inp} type="number" min="1" value={form.qty} onChange={set("qty")} /></F>
+          <F label="Qty"><input style={inp} type="number" min="1" value={form.qty} onChange={e => { set("qty")(e); if (effectiveType === "custom_cut") applyTierForQty(e.target.value); }} /></F>
           <F label="Unit"><select style={sel} value={form.unit} onChange={set("unit")}>{["ea","in","mm","ft","m","oz","g","pkg"].map(u => <option key={u}>{u}</option>)}</select></F>
 
-          {!catalogItem && (
+          {!catalogItem && effectiveType !== "custom_cut" && (
             <div style={{ gridColumn: is3D ? "1/-1" : undefined }}>
               <F label="Unit Cost ($)">
                 <div style={{ display: "flex", gap: 8 }}>
                   <input style={{ ...inp, flex: 1 }} type="number" step="0.01" value={form.unitCost} onChange={set("unitCost")} placeholder="0.00" />
                   {is3D && <button onClick={() => setShowCalc(true)} style={{ ...btnPrimary, padding: "7px 12px", fontSize: 11, whiteSpace: "nowrap" }}>🖨️ Calculate</button>}
                 </div>
+              </F>
+            </div>
+          )}
+          {!catalogItem && effectiveType === "custom_cut" && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="Volume Price Tiers" hint="Enter Send Cut Send price breaks — unit cost auto-updates when qty matches a tier">
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                  {(form.priceTiers || []).map((tier, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ color: "#6b8fa8", fontSize: 11, minWidth: 28 }}>Qty</span>
+                      <input style={{ ...inp, width: 70 }} type="number" min="1" value={tier.qty} onChange={e => setTier(i, "qty", e.target.value)} placeholder="e.g. 5" />
+                      <span style={{ color: "#6b8fa8", fontSize: 11 }}>= $</span>
+                      <input style={{ ...inp, width: 90 }} type="number" step="0.01" value={tier.price} onChange={e => setTier(i, "price", e.target.value)} placeholder="0.00" />
+                      <span style={{ color: "#6b8fa8", fontSize: 11 }}>/ea</span>
+                      <button type="button" onClick={() => removeTier(i)} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9 }}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addTier} style={{ ...btnGreenOut, padding: "5px 12px", fontSize: 10, alignSelf: "flex-start" }}>+ Add Price Break</button>
+                </div>
+                <F label="Unit Cost @ current qty ($)" hint="Auto-filled from tiers above, or enter manually">
+                  <input style={inp} type="number" step="0.01" value={form.unitCost} onChange={set("unitCost")} placeholder="0.00" />
+                </F>
               </F>
             </div>
           )}
@@ -1137,6 +1173,27 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
                   )}
                 </div>
                 {stlError && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{stlError}</div>}
+              </F>
+            </div>
+          )}
+          {effectiveType === "custom_cut" && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="DXF File" hint="Upload your DXF cut file — stored in the cloud, linked to this part">
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, opacity: dxfUploading ? 0.5 : 1 }}>
+                    {dxfUploading ? "Uploading…" : form.dxfUrl ? "↺ Replace DXF" : "⬆ Upload DXF"}
+                    <input type="file" accept=".dxf,.svg,.ai" onChange={handleDxfUpload} style={{ display: "none" }} disabled={dxfUploading} />
+                  </label>
+                  {form.dxfUrl && (
+                    <a href={form.dxfUrl} download={form.dxfName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      ⬇ {form.dxfName || "Download DXF"}
+                    </a>
+                  )}
+                  {form.dxfUrl && (
+                    <button type="button" onClick={() => setForm(p => ({ ...p, dxfUrl: "", dxfName: "" }))} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                  )}
+                </div>
+                {dxfError && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{dxfError}</div>}
               </F>
             </div>
           )}
@@ -1255,6 +1312,8 @@ function QuoteModal({ project, settings, catalog, onClose }) {
   const stockParts = parts.filter(p => p.isStock);
   const printParts = parts.filter(p => p.type === "3d_printed");
   const catParts   = rawParts.filter(p => p.catalogId);
+  const scsParts   = parts.filter(p => p.vendor === "sendcutsend" && p.type === "custom_cut");
+  const QTY_BREAKS = [1, 5, 10];
   const Line = ({ label, value, sub }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
       <div><div style={{ color: "#6b8fa8", fontSize: 13 }}>{label}</div>{sub && <div style={{ color: C.faint, fontSize: 10 }}>{sub}</div>}</div>
@@ -1262,7 +1321,7 @@ function QuoteModal({ project, settings, catalog, onClose }) {
     </div>
   );
   return (
-    <Modal title="📋  Quote Summary" onClose={onClose} width={480}>
+    <Modal title="📋  Quote Summary" onClose={onClose} width={520}>
       <div style={{ background: "#040b12", border: `1px solid ${C.border}`, borderRadius: 6, padding: "14px 16px", marginBottom: 20 }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18, color: "#e0f4ff" }}>{project.name}</div>
         {project.description && <div style={{ color: "#6b8fa8", fontSize: 11, marginTop: 3 }}>{project.description}</div>}
@@ -1292,6 +1351,57 @@ function QuoteModal({ project, settings, catalog, onClose }) {
           {printParts.length > 0 && <div style={{ color: C.green,  fontSize: 11 }}>🖨️ {printParts.length} 3D printed part(s) — includes filament, electricity, wear & labor</div>}
         </>
       )}
+
+      {scsParts.length > 0 && (
+        <>
+          <HR label="✂️  Send Cut Send — Quantity Pricing" />
+          {scsParts.map(p => {
+            const tiers = (p.priceTiers || []).filter(t => t.qty && t.price).sort((a,b) => n2(a.qty) - n2(b.qty));
+            const hasTiers = tiers.length > 0;
+            // If tiers exist use them; otherwise fall back to flat unit cost at QTY_BREAKS
+            const rows = hasTiers
+              ? tiers.map(t => ({ qty: n2(t.qty), unitPrice: n2(t.price) }))
+              : QTY_BREAKS.map(qty => ({ qty, unitPrice: n2(p.unitCost) }));
+            const currentQty = n2(p.qty || 1);
+            // Find effective unit price for current qty (highest tier that fits)
+            const effectiveUnit = hasTiers
+              ? (() => { const sorted = [...tiers].sort((a,b) => n2(b.qty)-n2(a.qty)); const m = sorted.find(t => currentQty >= n2(t.qty)); return m ? n2(m.price) : n2(rows[0]?.unitPrice || 0); })()
+              : n2(p.unitCost);
+            if (!rows.length) return null;
+            return (
+              <div key={p.id} style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                  <div style={{ color: C.text, fontSize: 12, fontWeight: 700 }}>{p.name}</div>
+                  <div style={{ color: "#6b8fa8", fontSize: 10 }}>BOM qty: <span style={{ color: C.accent, fontWeight: 700 }}>{currentQty}</span></div>
+                </div>
+                <div style={{ background: "#040b12", borderRadius: 6, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: `1px solid ${C.border}` }}>
+                    {["Qty","Unit Price","Total"].map(h => (
+                      <div key={h} style={{ padding: "6px 12px", color: "#6b8fa8", fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>{h}</div>
+                    ))}
+                  </div>
+                  {rows.map((row, i) => {
+                    const isCurrent = hasTiers
+                      ? (i === rows.length - 1 ? currentQty >= row.qty : currentQty >= row.qty && currentQty < n2(rows[i+1]?.qty))
+                      : row.qty === currentQty;
+                    return (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", background: isCurrent ? C.accent + "12" : "transparent", borderBottom: i < rows.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                        <div style={{ padding: "10px 12px", color: isCurrent ? C.accent : "#6b8fa8", fontSize: 13, fontWeight: isCurrent ? 700 : 400 }}>{row.qty}</div>
+                        <div style={{ padding: "10px 12px", color: isCurrent ? C.accent : "#6b8fa8", fontSize: 13, fontFamily: "monospace" }}>${row.unitPrice.toFixed(2)}/ea</div>
+                        <div style={{ padding: "10px 12px", color: isCurrent ? C.accent : C.text, fontSize: 13, fontFamily: "monospace", fontWeight: isCurrent ? 700 : 400 }}>${(row.unitPrice * row.qty).toFixed(2)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, color: "#6b8fa8", fontSize: 11 }}>
+                  Cost at qty {currentQty}: <span style={{ color: C.accent, fontFamily: "monospace", fontWeight: 700, marginLeft: 6 }}>${(effectiveUnit * currentQty).toFixed(2)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}><button onClick={onClose} style={btnGhost}>Close</button></div>
     </Modal>
   );
@@ -1454,7 +1564,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v3.8</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.1</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1551,6 +1661,7 @@ export default function App() {
                               {part.files && <div style={{ color: C.green, marginTop: 2, fontSize: 10 }}>{part.files.split(",").map((f, i) => <span key={i} style={{ marginRight: 6 }}>📄 {f.trim()}</span>)}</div>}
                               {part.designUrl && <div style={{ marginTop: 3 }}><a href={part.designUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>↗ Fusion 360</a></div>}
                               {part.stlUrl && <div style={{ marginTop: 3 }}><a href={part.stlUrl} download={part.stlName} style={{ color: C.green, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ STL</a></div>}
+                              {part.dxfUrl && <div style={{ marginTop: 3 }}><a href={part.dxfUrl} download={part.dxfName} style={{ color: C.yellow, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ DXF</a></div>}
                               {!part.partNumber && !part.files && !part.designUrl && !part.stlUrl && <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
