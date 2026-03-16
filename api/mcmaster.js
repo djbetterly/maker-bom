@@ -34,7 +34,7 @@ function extractCertAndKey(pfxBuffer, passphrase) {
 function request(options, body, certPem, keyPem) {
   return new Promise((resolve, reject) => {
     const req = https.request(
-      { ...options, host: BASE, cert: certPem, key: keyPem, rejectUnauthorized: true },
+      { ...options, host: BASE, cert: certPem, key: keyPem, rejectUnauthorized: false },
       res => {
         let data = "";
         res.on("data", chunk => data += chunk);
