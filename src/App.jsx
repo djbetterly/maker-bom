@@ -49,7 +49,7 @@ const SEED_CATALOG = [
 const EMPTY_PART = {
   id: null, name: "", type: "purchased", qty: 1, unit: "ea",
   vendor: "mcmaster", partNumber: "", url: "", files: "",
-  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "", stlUrl: "", stlName: "", dxfUrl: "", dxfName: "", priceTiers: [],
+  notes: "", unitCost: "", isStock: false, assemblyMins: 0, designUrl: "", stlUrl: "", stlName: "", dxfUrl: "", dxfName: "", priceTiers: [], docUrl: "", docName: "",
 };
 
 const EMPTY_CALC = {
@@ -688,7 +688,8 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, filaments, se
               <td style={{ padding: "9px 8px", fontSize: 11, maxWidth: 180 }}>
                 <div style={{ color: "#6b8fa8" }}>{c.notes || ""}</div>
                 {c.dxfUrl && <a href={c.dxfUrl} download={c.dxfName} style={{ color: C.yellow, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ DXF</a>}
-                {!c.notes && !c.dxfUrl && <span style={{ color: C.faint }}>—</span>}
+                {c.docUrl && <a href={c.docUrl} target="_blank" rel="noreferrer" style={{ color: C.purple, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>📄 Doc</a>}
+                {!c.notes && !c.dxfUrl && !c.docUrl && <span style={{ color: C.faint }}>—</span>}
               </td>
               <td style={{ padding: "9px 8px" }}>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -779,6 +780,31 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, filaments, se
                 Stock item — kept on hand, not procured per-build
               </label>
             </div>
+            {/* Documentation upload for any vendor */}
+            {form.vendor !== "mcmaster" && (
+              <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
+                <F label="Documentation" hint="Upload a receipt, quote, or spec PDF">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {form.docUrl ? "↺ Replace Doc" : "⬆ Upload PDF / Doc"}
+                      <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv" onChange={async e => {
+                        const file = e.target.files[0]; if (!file) return;
+                        const res = await fetch("/api/upload-stl", { method: "POST", headers: { "x-filename": file.name }, body: file });
+                        const data = await res.json();
+                        if (res.ok) setForm(p => ({ ...p, docUrl: data.url, docName: file.name }));
+                      }} style={{ display: "none" }} />
+                    </label>
+                    {form.docUrl && (
+                      <a href={form.docUrl} target="_blank" rel="noreferrer"
+                        style={{ color: C.purple, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        📄 {form.docName || "View Document"}
+                      </a>
+                    )}
+                    {form.docUrl && <button type="button" onClick={() => setForm(p => ({ ...p, docUrl: "", docName: "" }))} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9 }}>✕</button>}
+                  </div>
+                </F>
+              </div>
+            )}
             {/* DXF upload for Send Cut Send parts */}
             {form.vendor === "sendcutsend" && (
               <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
@@ -1071,6 +1097,9 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
   }
   const [stlError, setStlError]         = useState("");
   const [dxfUploading, setDxfUploading] = useState(false);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docError,     setDocError]     = useState("");
+  const handleDocUpload = e => handleFileUpload(e.target.files[0], setDocUploading, setDocError, "docUrl", "docName");
   const [dxfError, setDxfError]         = useState("");
 
   async function handleFileUpload(file, setUploading, setError, urlKey, nameKey) {
@@ -1327,6 +1356,31 @@ function PartModal({ initial, settings, filaments, catalog, onSave, onClose }) {
               <input style={inp} value={form.notes} onChange={set("notes")} placeholder={catalogItem ? "Leave blank to use catalog default" : "Material, finish, spec…"} />
             </F>
           </div>
+
+          {/* Documentation upload — receipts, quotes, PDFs — for all non-3D-printed parts */}
+          {effectiveType !== "3d_printed" && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <F label="Documentation" hint="Upload a receipt, quote, or spec PDF from the vendor">
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, opacity: docUploading ? 0.5 : 1 }}>
+                    {docUploading ? "Uploading…" : form.docUrl ? "↺ Replace Doc" : "⬆ Upload PDF / Doc"}
+                    <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv" onChange={handleDocUpload} style={{ display: "none" }} disabled={docUploading} />
+                  </label>
+                  {form.docUrl && (
+                    <a href={form.docUrl} target="_blank" rel="noreferrer"
+                      style={{ color: C.purple, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      📄 {form.docName || "View Document"}
+                    </a>
+                  )}
+                  {form.docUrl && (
+                    <button type="button" onClick={() => setForm(p => ({ ...p, docUrl: "", docName: "" }))}
+                      style={{ ...btnDanger, padding: "3px 8px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                  )}
+                </div>
+                {docError && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{docError}</div>}
+              </F>
+            </div>
+          )}
         </div>
 
         <HR label="Assembly & Inventory" />
@@ -1666,7 +1720,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.4</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.5</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1764,7 +1818,8 @@ export default function App() {
                               {part.designUrl && <div style={{ marginTop: 3 }}><a href={part.designUrl} target="_blank" rel="noreferrer" style={{ color: C.accent, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>↗ Fusion 360</a></div>}
                               {part.stlUrl && <div style={{ marginTop: 3 }}><a href={part.stlUrl} download={part.stlName} style={{ color: C.green, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ STL</a></div>}
                               {part.dxfUrl && <div style={{ marginTop: 3 }}><a href={part.dxfUrl} download={part.dxfName} style={{ color: C.yellow, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ DXF</a></div>}
-                              {!part.partNumber && !part.files && !part.designUrl && !part.stlUrl && <span style={{ color: C.faint }}>—</span>}
+                              {part.docUrl && <div style={{ marginTop: 3 }}><a href={part.docUrl} target="_blank" rel="noreferrer" style={{ color: C.purple, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>📄 Doc</a></div>}
+                              {!part.partNumber && !part.files && !part.designUrl && !part.stlUrl && !part.docUrl && <span style={{ color: C.faint }}>—</span>}
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
                             <td style={{ padding: "9px 10px", color: tot > 0 ? C.accent : C.faint, fontSize: 12, fontWeight: 700 }}>{tot > 0 ? `$${tot.toFixed(2)}` : "—"}</td>
