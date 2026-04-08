@@ -470,6 +470,29 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
   const [showImport, setShowImport]       = useState(false);
   const [localImages, setLocalImages]     = useState(imageCache || {});
   const [batchStatus, setBatchStatus]     = useState(null); // null | {done, total, current}
+  const [catDxfUploading, setCatDxfUploading] = useState(false);
+  const [catDxfError,     setCatDxfError]     = useState("");
+
+  async function handleCatalogDxfUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCatDxfUploading(true);
+    setCatDxfError("");
+    try {
+      const res = await fetch("/api/upload-stl", {
+        method: "POST",
+        headers: { "x-filename": file.name },
+        body: file,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setForm(p => ({ ...p, dxfUrl: data.url, dxfName: file.name }));
+    } catch (err) {
+      setCatDxfError(err.message);
+    } finally {
+      setCatDxfUploading(false);
+    }
+  }
 
   async function fetchImageAsBase64(imagePath) {
     try {
@@ -661,7 +684,11 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
                 </div>
               </td>
               <td style={{ padding: "9px 8px" }}>{c.isStock && <span style={{ background: C.yellow + "22", color: C.yellow, border: `1px solid ${C.yellow}44`, borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>STOCK</span>}</td>
-              <td style={{ padding: "9px 8px", color: "#6b8fa8", fontSize: 11, maxWidth: 180 }}>{c.notes || <span style={{ color: C.faint }}>—</span>}</td>
+              <td style={{ padding: "9px 8px", fontSize: 11, maxWidth: 180 }}>
+                <div style={{ color: "#6b8fa8" }}>{c.notes || ""}</div>
+                {c.dxfUrl && <a href={c.dxfUrl} download={c.dxfName} style={{ color: C.yellow, fontSize: 10, textDecoration: "none", fontFamily: "monospace" }}>⬇ DXF</a>}
+                {!c.notes && !c.dxfUrl && <span style={{ color: C.faint }}>—</span>}
+              </td>
               <td style={{ padding: "9px 8px" }}>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => startEdit(c)} style={{ ...btnGhost, padding: "3px 8px", fontSize: 9 }}>edit</button>
@@ -731,6 +758,28 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
                 Stock item — kept on hand, not procured per-build
               </label>
             </div>
+            {/* DXF upload for Send Cut Send parts */}
+            {form.vendor === "sendcutsend" && (
+              <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
+                <F label="DXF File" hint="Upload the cut file for this part — stored in the cloud">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, opacity: catDxfUploading ? 0.5 : 1 }}>
+                      {catDxfUploading ? "Uploading…" : form.dxfUrl ? "↺ Replace DXF" : "⬆ Upload DXF"}
+                      <input type="file" accept=".dxf,.svg,.ai" onChange={handleCatalogDxfUpload} style={{ display: "none" }} disabled={catDxfUploading} />
+                    </label>
+                    {form.dxfUrl && (
+                      <a href={form.dxfUrl} download={form.dxfName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        ⬇ {form.dxfName || "Download DXF"}
+                      </a>
+                    )}
+                    {form.dxfUrl && (
+                      <button type="button" onClick={() => setForm(p => ({ ...p, dxfUrl: "", dxfName: "" }))} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                    )}
+                  </div>
+                  {catDxfError && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{catDxfError}</div>}
+                </F>
+              </div>
+            )}
             {/* Product image preview */}
             {form.imagePath && (
               <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
@@ -1564,7 +1613,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.1</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.2</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
