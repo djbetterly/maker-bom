@@ -436,7 +436,7 @@ function InvoiceImportModal({ catalog, onImport, onClose }) {
 }
 
 // ─── PARTS CATALOG MODAL ──────────────────────────────────────────────────────
-function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
+function CatalogModal({ catalog, onSave, imageCache, onSaveImages, filaments, settings, onClose }) {
   const [list, setList]       = useState(catalog);
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -449,8 +449,8 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
   const setF = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
   const tog  = k => () => setForm(p => ({ ...p, [k]: !p[k] }));
 
-  function startNew() { setForm({ name: "", vendor: "mcmaster", partNumber: "", url: "", pkgQty: "1", pkgPrice: "", unitCost: "", isStock: false, notes: "" }); setEditing("new"); }
-  function startEdit(c) { setForm({ pkgQty: "1", pkgPrice: "", ...c }); setEditing(c); }
+  function startNew() { setForm({ name: "", vendor: "mcmaster", partType: "purchased", partNumber: "", url: "", pkgQty: "1", pkgPrice: "", unitCost: "", isStock: false, notes: "" }); setEditing("new"); }
+  function startEdit(c) { setForm({ pkgQty: "1", pkgPrice: "", partType: "purchased", ...c }); setEditing(c); }
   function saveForm() {
     if (!form.name.trim()) return;
     const pq = parseFloat(form.pkgQty) || 1;
@@ -471,6 +471,7 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
   const [localImages, setLocalImages]     = useState(imageCache || {});
   const [batchStatus, setBatchStatus]     = useState(null); // null | {done, total, current}
   const [catDxfUploading, setCatDxfUploading] = useState(false);
+  const [showCatCalc,     setShowCatCalc]     = useState(false);
   const [catDxfError,     setCatDxfError]     = useState("");
 
   async function handleCatalogDxfUpload(e) {
@@ -706,6 +707,11 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
           <div style={{ color: C.accent, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>{editing === "new" ? "New Catalog Part" : "Edit Catalog Part"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0 16px" }}>
             <div style={{ gridColumn: "1/-1" }}><F label="Part Name"><input style={inp} value={form.name} onChange={setF("name")} placeholder="e.g. M3×8 SHCS" autoFocus /></F></div>
+            <F label="Type">
+              <select style={sel} value={form.partType || "purchased"} onChange={setF("partType")}>
+                {PART_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+              </select>
+            </F>
             <F label="Vendor"><select style={sel} value={form.vendor} onChange={setF("vendor")}>{VENDORS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></F>
             <F label="Part Number">
               <div style={{ display: "flex", gap: 8 }}>
@@ -722,7 +728,22 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
               </div>
               {lookupStatus === "error" && <div style={{ color: C.red, fontSize: 10, marginTop: 4 }}>{lookupError}</div>}
             </F>
-            <F label="Unit Cost ($)"><input style={inp} type="number" step="0.01" value={form.unitCost} onChange={setF("unitCost")} placeholder="0.00" /></F>
+            <F label="Unit Cost ($)">
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...inp, flex: 1, opacity: (form.pkgPrice && parseFloat(form.pkgPrice) > 0) ? 0.5 : 1 }}
+                  type="number" step="0.0001"
+                  value={form.pkgPrice && parseFloat(form.pkgPrice) > 0 ? (parseFloat(form.pkgPrice)/(parseFloat(form.pkgQty)||1)).toFixed(4) : form.unitCost}
+                  onChange={setF("unitCost")}
+                  readOnly={!!(form.pkgPrice && parseFloat(form.pkgPrice) > 0)}
+                  placeholder="0.00" />
+                {(form.partType || "purchased") === "3d_printed" && (
+                  <button type="button" onClick={() => setShowCatCalc(true)}
+                    style={{ ...btnPrimary, padding: "7px 12px", fontSize: 11, whiteSpace: "nowrap" }}>
+                    🖨️ Calculate
+                  </button>
+                )}
+              </div>
+            </F>
             <div style={{ gridColumn: "1/-1" }}>
               <F label="URL — paste to auto-detect vendor & part #">
                 <div style={{ display: "flex", gap: 8 }}>
@@ -780,6 +801,30 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
                 </F>
               </div>
             )}
+            {/* STL upload for 3D printed catalog parts */}
+            {(form.partType || "purchased") === "3d_printed" && (
+              <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
+                <F label="STL File" hint="Upload the STL for this catalog part">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label style={{ ...btnGhost, padding: "7px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {form.stlUrl ? "↺ Replace STL" : "⬆ Upload STL"}
+                      <input type="file" accept=".stl,.obj,.3mf" onChange={async e => {
+                        const file = e.target.files[0]; if (!file) return;
+                        const res = await fetch("/api/upload-stl", { method: "POST", headers: { "x-filename": file.name }, body: file });
+                        const data = await res.json();
+                        if (res.ok) setForm(p => ({ ...p, stlUrl: data.url, stlName: file.name }));
+                      }} style={{ display: "none" }} />
+                    </label>
+                    {form.stlUrl && (
+                      <a href={form.stlUrl} download={form.stlName} style={{ color: C.accent, fontSize: 11, fontFamily: "monospace", textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        ⬇ {form.stlName || "Download STL"}
+                      </a>
+                    )}
+                    {form.stlUrl && <button type="button" onClick={() => setForm(p => ({ ...p, stlUrl: "", stlName: "" }))} style={{ ...btnDanger, padding: "3px 8px", fontSize: 9 }}>✕</button>}
+                  </div>
+                </F>
+              </div>
+            )}
             {/* Product image preview */}
             {form.imagePath && (
               <div style={{ gridColumn: "1/-1", marginBottom: 14 }}>
@@ -829,6 +874,14 @@ function CatalogModal({ catalog, onSave, imageCache, onSaveImages, onClose }) {
           catalog={list}
           onImport={handleInvoiceImport}
           onClose={() => setShowImport(false)}
+        />
+      )}
+      {showCatCalc && settings && (
+        <PrintCalc
+          settings={settings}
+          filaments={filaments || []}
+          onApply={cost => { setForm(p => ({ ...p, unitCost: cost })); setShowCatCalc(false); }}
+          onClose={() => setShowCatCalc(false)}
         />
       )}
     </Modal>
@@ -1613,7 +1666,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.2</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.3</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1752,7 +1805,7 @@ export default function App() {
       {/* ── MODALS ── */}
       {showSettings    && <SettingsModal settings={settings} onSave={s => { saveSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
       {showFilamentLib && <FilamentLibraryModal filaments={filaments} onSave={fl => { saveFilaments(fl); setShowFilamentLib(false); }} onClose={() => setShowFilamentLib(false)} />}
-      {showCatalog     && <CatalogModal catalog={catalog} onSave={saveCatalog} imageCache={imageCache} onSaveImages={saveImageCache} onClose={() => setShowCatalog(false)} />}
+      {showCatalog     && <CatalogModal catalog={catalog} onSave={saveCatalog} imageCache={imageCache} onSaveImages={saveImageCache} filaments={filaments} settings={settings} onClose={() => setShowCatalog(false)} />}
       {showAddProj     && <ProjectModal onSave={addProject} onClose={() => setShowAddProj(false)} />}
       {editProj        && <ProjectModal initial={editProj} onSave={updateProject} onClose={() => setEditProj(null)} />}
       {showAddPart     && <PartModal settings={settings} filaments={filaments} catalog={catalog} onSave={addPart} onClose={() => setShowAddPart(false)} />}
