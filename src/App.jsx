@@ -1666,7 +1666,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.3</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.4</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1734,7 +1734,7 @@ export default function App() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ color: "#6b8fa8", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>
-                        {["", "Name", "Vendor", "Qty", "Part # / Files", "Unit $", "Total", "Asm", "Notes", ""].map((h, i) => (
+                        {["", "Name", "Vendor", "Qty", "Part # / Files", "Unit $", "Total", "Asm Total", "Notes", ""].map((h, i) => (
                           <th key={i} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -1768,7 +1768,14 @@ export default function App() {
                             </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 12, fontWeight: 700 }}>{cost > 0 ? `$${cost.toFixed(2)}` : <span style={{ color: C.faint }}>—</span>}</td>
                             <td style={{ padding: "9px 10px", color: tot > 0 ? C.accent : C.faint, fontSize: 12, fontWeight: 700 }}>{tot > 0 ? `$${tot.toFixed(2)}` : "—"}</td>
-                            <td style={{ padding: "9px 10px", fontSize: 11 }}>{asm > 0 ? <span style={{ color: C.purple }}>{asm.toFixed(0)}m</span> : <span style={{ color: C.faint }}>—</span>}</td>
+                            <td style={{ padding: "9px 10px", fontSize: 11 }}>
+                              {asm > 0 ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                                  <span style={{ color: C.purple }}>{asm.toFixed(1)}m</span>
+                                  {n2(part.qty || 1) > 1 && <span style={{ color: C.faint, fontSize: 9 }}>{n2(part.assemblyMins).toFixed(1)}m/ea</span>}
+                                </div>
+                              ) : <span style={{ color: C.faint }}>—</span>}
+                            </td>
                             <td style={{ padding: "9px 10px", color: "#6b8fa8", fontSize: 11, maxWidth: 160 }}>{part.notes || <span style={{ color: C.faint }}>—</span>}</td>
                             <td style={{ padding: "9px 10px" }}>
                               <div className="acts" style={{ display: "flex", gap: 5, opacity: 0, transition: "opacity 0.15s" }}>
