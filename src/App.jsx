@@ -1463,7 +1463,7 @@ function QuoteModal({ project, settings, catalog, onClose }) {
   const delCost   = delivery.reduce((s, d) => s + n2(d.amount), 0);
   const totalCost = partsCost + asmCost + delCost;
   const mu        = settings.defaultMarkup;
-  const price     = totalCost * (1 + mu / 100);
+  const price     = (partsCost + delCost) * (1 + mu / 100) + asmCost;
   const byVendor  = VENDORS.map(v => ({ ...v, parts: parts.filter(p => p.vendor === v.id).reduce((s,p) => s + n2(p.unitCost)*n2(p.qty||1), 0), delivery: delivery.filter(d => d.vendor === v.id).reduce((s,d) => s + n2(d.amount), 0) })).filter(v => v.parts + v.delivery > 0);
   const stockParts = parts.filter(p => p.isStock);
   const printParts = parts.filter(p => p.type === "3d_printed");
@@ -1487,7 +1487,7 @@ function QuoteModal({ project, settings, catalog, onClose }) {
       <Line label="Assembly Labor"    value={asmCost}   sub={`${asmMins.toFixed(0)} min @ $${settings.laborRate}/hr`} />
       <Line label="Delivery / Shipping" value={delCost} sub={`${delivery.filter(d => n2(d.amount) > 0).length} vendor(s)`} />
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ color: "#6b8fa8", fontSize: 13 }}>Total Cost</span><span style={{ color: C.text, fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>${totalCost.toFixed(2)}</span></div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}><span style={{ color: "#6b8fa8", fontSize: 12 }}>Markup ({mu}%)</span><span style={{ color: "#6b8fa8", fontSize: 12, fontFamily: "monospace" }}>+${(price - totalCost).toFixed(2)}</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}><span style={{ color: "#6b8fa8", fontSize: 12 }}>Markup ({mu}% on parts & delivery)</span><span style={{ color: "#6b8fa8", fontSize: 12, fontFamily: "monospace" }}>+${(price - totalCost).toFixed(2)}</span></div>
       <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <span style={{ color: C.accent, fontWeight: 700, fontSize: 12, letterSpacing: "0.06em" }}>SUGGESTED PRICE</span>
         <span style={{ color: C.accent, fontSize: 26, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>${price.toFixed(2)}</span>
@@ -1660,7 +1660,7 @@ export default function App() {
   const asmCost   = (asmMins / 60) * settings.laborRate;
   const delCost   = delivery.reduce((s, d) => s + n2(d.amount), 0);
   const totalCost = partsCost + asmCost + delCost;
-  const suggested = totalCost * (1 + settings.defaultMarkup / 100);
+  const suggested = (partsCost + delCost) * (1 + settings.defaultMarkup / 100) + asmCost;
 
   function addProject(form)    { const p = { id: uid(), created: new Date().toISOString().slice(0, 10), parts: [], delivery: [], ...form }; const next = [...projects, p]; persist(next); setSelected(p.id); setShowAddProj(false); }
   function updateProject(form) { persist(projects.map(p => p.id === editProj.id ? { ...p, ...form } : p)); setEditProj(null); }
@@ -1681,7 +1681,7 @@ export default function App() {
       [...blank, "Assembly",        `${asmMins.toFixed(0)}min`, asmCost.toFixed(2), "", "", ""],
       [...blank, "Delivery",        "", delCost.toFixed(2), "", "", ""],
       [...blank, "TOTAL COST",      "", totalCost.toFixed(2), "", "", ""],
-      [...blank, "SUGGESTED PRICE", `${settings.defaultMarkup}% markup`, suggested.toFixed(2), "", "", ""],
+      [...blank, "SUGGESTED PRICE", `${settings.defaultMarkup}% markup on parts+delivery`, suggested.toFixed(2), "", "", ""],
     ];
     const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `${active.name.replace(/\s+/g, "_")}_BOM.csv` });
@@ -1720,7 +1720,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.5</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.6</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
@@ -1769,7 +1769,7 @@ export default function App() {
                   <Stat label={`Assembly (${asmMins.toFixed(0)}min)`}   value={`$${asmCost.toFixed(2)}`}   color={C.purple} />
                   <Stat label="Delivery"                                 value={`$${delCost.toFixed(2)}`}   color={C.yellow} />
                   <Stat label="Total Cost"                               value={`$${totalCost.toFixed(2)}`} color={C.accent} />
-                  <Stat label={`Price (${settings.defaultMarkup}% up)`} value={`$${suggested.toFixed(2)}`} color={C.green} />
+                  <Stat label={`Price (${settings.defaultMarkup}% on parts)`} value={`$${suggested.toFixed(2)}`} color={C.green} />
                 </div>
               </div>
 
