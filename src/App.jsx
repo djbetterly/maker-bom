@@ -1470,6 +1470,122 @@ function QuoteModal({ project, settings, catalog, onClose }) {
   const catParts   = rawParts.filter(p => p.catalogId);
   const scsParts   = parts.filter(p => p.vendor === "sendcutsend" && p.type === "custom_cut");
   const QTY_BREAKS = [1, 5, 10];
+  const [copied, setCopied] = useState(false);
+
+  function exportPDF() {
+    const date = new Date().toLocaleDateString();
+    const vendorRows = byVendor.map(v =>
+      `  ${VENDORS.find(x => x.id === v.id)?.label ?? v.id}: $${(v.parts + v.delivery).toFixed(2)}`
+    ).join("\n");
+    const partRows = parts.map(p =>
+      `  ${p.name.padEnd(30)} ${String(p.qty).padStart(4)} ea   $${n2(p.unitCost).toFixed(2)}/ea   $${(n2(p.unitCost)*n2(p.qty||1)).toFixed(2)}`
+    ).join("\n");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Quote — ${project.name}</title>
+<style>
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; max-width: 720px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  th { text-align: left; border-bottom: 2px solid #111; padding: 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 8px 8px; border-bottom: 1px solid #e0e0e0; }
+  .right { text-align: right; }
+  .section { margin: 24px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #888; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .total-row td { font-weight: 600; border-top: 2px solid #111; border-bottom: none; }
+  .price-box { background: #f0f8ff; border: 2px solid #0088cc; border-radius: 8px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; margin: 24px 0; }
+  .price-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #0088cc; }
+  .price-value { font-size: 32px; font-weight: 800; color: #0088cc; font-family: monospace; }
+  .note { font-size: 11px; color: #888; margin-top: 4px; }
+  @media print { body { margin: 0; } }
+</style>
+</head>
+<body>
+<h1>${project.name}</h1>
+<div class="sub">${project.description ? project.description + " &nbsp;·&nbsp; " : ""}Generated ${date}</div>
+
+<div class="section">Parts & Materials</div>
+<table>
+  <thead><tr><th>Part</th><th>Type</th><th class="right">Qty</th><th class="right">Unit $</th><th class="right">Total</th></tr></thead>
+  <tbody>
+    ${parts.map(p => `<tr>
+      <td>${p.name}</td>
+      <td style="color:#666">${PART_TYPES.find(t=>t.id===p.type)?.label ?? p.type}</td>
+      <td class="right">${p.qty}</td>
+      <td class="right">$${n2(p.unitCost).toFixed(2)}</td>
+      <td class="right">$${(n2(p.unitCost)*n2(p.qty||1)).toFixed(2)}</td>
+    </tr>`).join("")}
+    <tr class="total-row"><td colspan="4">Parts Subtotal</td><td class="right">$${partsCost.toFixed(2)}</td></tr>
+  </tbody>
+</table>
+
+<div class="section">Cost Summary</div>
+<table>
+  <tbody>
+    <tr><td>Parts & Materials</td><td class="right">$${partsCost.toFixed(2)}</td></tr>
+    <tr><td>Assembly Labor <span class="note">${asmMins.toFixed(0)} min @ $${settings.laborRate}/hr</span></td><td class="right">$${asmCost.toFixed(2)}</td></tr>
+    <tr><td>Delivery / Shipping</td><td class="right">$${delCost.toFixed(2)}</td></tr>
+    <tr><td>Markup (${mu}% on parts & delivery)</td><td class="right">+$${(price - totalCost).toFixed(2)}</td></tr>
+    <tr class="total-row"><td>Total Cost</td><td class="right">$${totalCost.toFixed(2)}</td></tr>
+  </tbody>
+</table>
+
+<div class="price-box">
+  <div class="price-label">Suggested Price</div>
+  <div class="price-value">$${price.toFixed(2)}</div>
+</div>
+
+${byVendor.length > 0 ? `<div class="section">By Vendor</div>
+<table><tbody>
+${byVendor.map(v => `<tr><td>${VENDORS.find(x=>x.id===v.id)?.label ?? v.id}</td><td class="right">$${(v.parts+v.delivery).toFixed(2)}</td></tr>`).join("")}
+</tbody></table>` : ""}
+
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 500);
+  }
+
+  function copyForEmail() {
+    const date = new Date().toLocaleDateString();
+    const lines = [
+      `QUOTE — ${project.name}`,
+      project.description ? project.description : "",
+      `Generated: ${date}`,
+      "",
+      "PARTS & MATERIALS",
+      "─".repeat(50),
+      ...parts.map(p =>
+        `${p.name} (×${p.qty})  $${n2(p.unitCost).toFixed(2)}/ea = $${(n2(p.unitCost)*n2(p.qty||1)).toFixed(2)}`
+      ),
+      "",
+      "COST SUMMARY",
+      "─".repeat(50),
+      `Parts & Materials:      $${partsCost.toFixed(2)}`,
+      `Assembly Labor:         $${asmCost.toFixed(2)}  (${asmMins.toFixed(0)} min @ $${settings.laborRate}/hr)`,
+      `Delivery / Shipping:    $${delCost.toFixed(2)}`,
+      `Markup (${mu}% on parts): +$${(price - totalCost).toFixed(2)}`,
+      `Total Cost:             $${totalCost.toFixed(2)}`,
+      "",
+      `SUGGESTED PRICE:        $${price.toFixed(2)}`,
+      "",
+      byVendor.length > 0 ? "BY VENDOR" : "",
+      byVendor.length > 0 ? "─".repeat(50) : "",
+      ...byVendor.map(v => `${VENDORS.find(x=>x.id===v.id)?.label ?? v.id}: $${(v.parts+v.delivery).toFixed(2)}`),
+    ].filter(l => l !== undefined).join("\n");
+
+    navigator.clipboard.writeText(lines).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
   const Line = ({ label, value, sub }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
       <div><div style={{ color: "#6b8fa8", fontSize: 13 }}>{label}</div>{sub && <div style={{ color: C.faint, fontSize: 10 }}>{sub}</div>}</div>
@@ -1558,7 +1674,13 @@ function QuoteModal({ project, settings, catalog, onClose }) {
         </>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}><button onClick={onClose} style={btnGhost}>Close</button></div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+        <button onClick={onClose} style={btnGhost}>Close</button>
+        <button onClick={copyForEmail} style={{ ...btnGhost, color: copied ? C.green : "#6b8fa8", borderColor: copied ? C.green + "55" : C.border2 }}>
+          {copied ? "✓ Copied!" : "✉ Copy for Email"}
+        </button>
+        <button onClick={exportPDF} style={{ ...btnPrimary }}>⬇ Export PDF</button>
+      </div>
     </Modal>
   );
 }
@@ -1720,7 +1842,7 @@ export default function App() {
                   style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: syncStatus === "syncing" ? C.yellow : syncStatus === "ok" ? C.green : syncStatus === "error" ? C.red : C.border2 }} />
               </div>
             </div>
-            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.6</div>
+            <div style={{ color: "#4a6a82", fontSize: 10, letterSpacing: "0.14em", marginTop: 2 }}>BUILD CATALOG v4.7</div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
